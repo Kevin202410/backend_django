@@ -1,0 +1,36 @@
+[
+    {
+        "model": "app_user.users",
+        "pk": 541150219354505,
+        "fields": {
+            "password": "pbkdf2_sha256$600000$PsjRRnRPVP3HH3iuWIFc3K$P/78Ut0cjzt2OxDWHG1U/0+ZgdEM/N2M79LfmSF+wCo=",
+            "last_login": null,
+            "is_superuser": true,
+            "is_staff": true,
+            "is_active": true,
+            "date_joined": "2023-08-31T17:37:46",
+            "creator": null,
+            "modifier": "541150219354505",
+            "update_datetime": "2023-12-15T16:43:25.930",
+            "create_datetime": "2023-08-31T17:37:46.379",
+            "status": "0",
+            "username": "sunny",
+            "nickname": "沈杨阳",
+            "employee_no": null,
+            "email": "Kevin19860113@hotmail.com",
+            "phone": "18005329615",
+            "avatar": null,
+            "gender": "0",
+            "dept": 94609026700594,
+            "last_token": "",
+            "is_delete": false,
+            "remark": null,
+            "post": [
+                62104692200590
+            ],
+            "role": [
+                540775921959829
+            ]
+        }
+    }
+]
