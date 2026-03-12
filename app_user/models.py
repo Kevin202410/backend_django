@@ -14,9 +14,10 @@ class Users(BaseModel, AbstractUser):
         ('0', "正常"),
         ('1', "停用"),
     )
+    id_card = models.CharField(max_length=18, unique=True, verbose_name="身份证号")
     status = models.CharField(max_length=1, choices=IS_STATUS, default='0', verbose_name="用户状态（0正常 1停用）", help_text="用户状态（0正常 1停用）")
-    username = models.CharField(max_length=150, unique=True, db_index=True, verbose_name="用户账号", help_text="用户账号")
-    nickname = models.CharField(max_length=150, unique=True, verbose_name="用户昵称", help_text="用户昵称")
+    username = models.CharField(max_length=150, unique=True, db_index=True, verbose_name="用户账号", null=True, blank=True, help_text="用户账号")
+    nickname = models.CharField(max_length=150, unique=False, verbose_name="用户姓名", help_text="用户姓名")
     employee_no = models.CharField(max_length=150, unique=True, db_index=True, null=True, blank=True, verbose_name="用户工号", help_text="工号")
     email = models.EmailField(max_length=255, verbose_name="邮箱", null=True, blank=True, help_text="邮箱")
     phone = models.CharField(max_length=255, verbose_name="手机号", null=True, blank=True, help_text="手机号")

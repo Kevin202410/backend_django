@@ -11,7 +11,7 @@ from app_user.models import Users
 from utils.common import REGEX_MOBILE
 from utils.serializers import CustomModelSerializer
 from utils.validator import CustomUniqueValidator, CustomValidationError
-
+from utils.id_card_utlis import validate_id_card
 
 class UserSerializer(CustomModelSerializer):
     """
@@ -32,18 +32,25 @@ class UserCreateSerializer(CustomModelSerializer):
     password = serializers.CharField(required=False, default=make_password("123456"))
     username = serializers.CharField(
         max_length=50,
-        validators=[CustomUniqueValidator(queryset=Users.objects.all(), message="账号必须唯一")])
+        validators=[CustomUniqueValidator(queryset=Users.objects.all(), message="账号必须唯一")]
+    )
     nickname = serializers.CharField(
         max_length=50,
-        validators=[CustomUniqueValidator(queryset=Users.objects.all(), message="用户昵称必须唯一")])
+    )
+    id_card = serializers.CharField(
+        max_length=18,
+        write_only=True,
+        validators=[CustomUniqueValidator(queryset=Users.objects.all(), message="身份证号必须唯一")]
+    )
     phone = serializers.CharField(
         validators=[CustomUniqueValidator(queryset=Users.objects.all(), message="手机号必须唯一")],
         allow_blank=True)
 
-    def validate_phone(self, value):
-        if not re.match(REGEX_MOBILE, value):
-            raise CustomValidationError('请输入一个有效的手机号码')
-        return value
+
+    # def validate_phone(self, value):
+    #     if not re.match(REGEX_MOBILE, value):
+    #         raise CustomValidationError('请输入一个有效的手机号码')
+    #     return value
 
     def create(self, validated_data):
         if 'password' in validated_data.keys():
@@ -51,6 +58,13 @@ class UserCreateSerializer(CustomModelSerializer):
                 validated_data['password'] = make_password(validated_data['password'])
 
         return super().create(validated_data)
+
+    def validate_id_card(self, value):
+        """自定义身份证号校验"""
+        is_valid, msg = validate_id_card(value)
+        if not is_valid:
+            raise serializers.ValidationError(msg)
+        return value
 
     class Meta:
         model = Users
