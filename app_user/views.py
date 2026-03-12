@@ -12,7 +12,10 @@ from app_user.models import Users
 from app_user.serializers import UserSerializer, UserCreateSerializer, UserResource
 from utils.json_response import DetailResponse, ErrorResponse
 from utils.viewset import CustomModelViewSet
-
+from rest_framework.parsers import MultiPartParser, FormParser  # 新增：处理文件上传
+import tablib  # 新增：解析Excel/CSV文件
+from import_export import resources  # 新增：导入导出核心
+from io import BytesIO  # 新增：内存文件处理
 
 class UserViewSet(CustomModelViewSet):
     queryset = Users.objects.exclude(is_delete=1).all()
@@ -21,6 +24,81 @@ class UserViewSet(CustomModelViewSet):
     update_serializer_class = UserCreateSerializer
     filterset_fields = ['status', 'phone', 'role', 'dept']
     search_fields = ["username", "nickname"]
+
+    # 新增：支持文件上传解析
+    parser_classes = [MultiPartParser, FormParser]
+
+    @action(methods=["POST"], detail=False, permission_classes=[IsAuthenticated])
+    def batch_import(self, request):
+        """
+        用户批量导入（支持xls/xlsx/csv格式）
+        """
+        # 1. 校验文件是否上传
+        file = request.FILES.get("file")
+        if not file:
+            return ErrorResponse(code=400, msg="请上传导入文件（支持xls/xlsx/csv）")
+
+        # 2. 校验文件格式
+        allowed_extensions = ['xls', 'xlsx', 'csv']
+        file_name = file.name
+        file_ext = file_name.split('.')[-1].lower() if '.' in file_name else ''
+        if file_ext not in allowed_extensions:
+            return ErrorResponse(code=400, msg=f"不支持的文件格式：{file_ext}，仅支持{','.join(allowed_extensions)}")
+
+        try:
+            # 3. 读取文件内容并适配格式
+            file_content = file.read()
+            dataset = tablib.Dataset()
+
+            # 适配xls/xlsx/csv格式
+            if file_ext == 'xls':
+                dataset.load(file_content, format='xls')
+            elif file_ext == 'xlsx':
+                dataset.load(file_content, format='xlsx')
+            elif file_ext == 'csv':
+                # 处理CSV编码问题
+                dataset.load(file_content.decode('utf-8'), format='csv')
+
+            # 4. 使用UserResource校验并导入数据
+            user_resource = UserResource()
+            # 校验数据（保留失败行信息）
+            result = user_resource.import_data(
+                dataset,
+                dry_run=False,  # True=仅校验不入库；False=校验+入库
+                raise_errors=False,  # 不抛出全局异常，保留每行错误
+                use_transactions=True  # 开启事务，保证导入原子性
+            )
+
+            # 5. 统计导入结果
+            success_count = result.totals.get('new', 0) + result.totals.get('update', 0)
+            fail_count = len(result.invalid_rows)
+
+            # 6. 整理失败详情（行号+错误原因）
+            fail_detail = []
+            for row in result.invalid_rows:
+                # 行号从1开始（适配Excel展示习惯）
+                row_num = row.number + 1
+                # 拼接错误信息
+                error_msg = "; ".join([f"{k}: {v}" for k, v in row.error_dict.items()])
+                fail_detail.append({
+                    "row": row_num,
+                    "data": row.values,
+                    "error": error_msg
+                })
+
+            # 7. 返回导入结果
+            return DetailResponse(
+                data={
+                    "success_count": success_count,
+                    "fail_count": fail_count,
+                    "fail_detail": fail_detail
+                },
+                msg=f"导入完成：成功{success_count}条，失败{fail_count}条"
+            )
+
+        except Exception as e:
+            # 捕获未知异常，返回友好提示
+            return ErrorResponse(code=500, msg=f"导入失败：{str(e)}")
 
     @action(methods=["GET"], detail=False, permission_classes=[IsAuthenticated])
     def auth(self, request):

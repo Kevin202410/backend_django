@@ -39,7 +39,6 @@ class UserCreateSerializer(CustomModelSerializer):
     )
     id_card = serializers.CharField(
         max_length=18,
-        write_only=True,
         validators=[CustomUniqueValidator(queryset=Users.objects.all(), message="身份证号必须唯一")]
     )
     phone = serializers.CharField(
@@ -77,6 +76,7 @@ class UserResource(resources.ModelResource):
     status = Field(attribute='status', column_name=Users.status.field.verbose_name)
     username = Field(attribute='username', column_name=Users.username.field.verbose_name)
     nickname = Field(attribute='nickname', column_name=Users.nickname.field.verbose_name)
+    id_card = Field(attribute='id_card', column_name=Users.id_card.field.verbose_name)
     employee_no = Field(attribute='employee_no', column_name=Users.employee_no.field.verbose_name)
     email = Field(attribute='email', column_name=Users.email.field.verbose_name)
     phone = Field(attribute='phone', column_name=Users.phone.field.verbose_name)
@@ -103,5 +103,5 @@ class UserResource(resources.ModelResource):
     class Meta:
         model = Users
         fields = ('id', 'status', 'username', 'nickname', 'employee_no', 'email', 'phone', 'gender', 'post', 'role', 'dept', 'remark',
-                  'update_datetime', 'create_datetime')
+                  'id_card', 'update_datetime', 'create_datetime')
         export_order = fields
