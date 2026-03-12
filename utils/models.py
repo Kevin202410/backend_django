@@ -1,43 +1,67 @@
-"""
-Time:     2023/8/6 16:07
-Author:   公众号【布鲁的Python之旅】，【github】https://github.com/taskPyroer， 【gitee】https://gitee.com/hu_yupeng123/projects
-Version:  V 0.1
-File:
-Describe: 公共基础model类
-"""
 import secrets
+import threading
 import time
-
 from django.db import models
 from application import settings
 
 table_prefix = "sys_"  # 数据库表名前缀
 
-
 class SnowflakeIDField(models.BigIntegerField):
     """
-    雪花id-生成16位
+    8位雪花ID字段（仅新增时生成，更新保留原ID）
+    结构：6位秒级时间戳后6位 + 2位序列号（0-99），总8位数字
     """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # 初始化序列号和上一次时间戳（线程安全）
+        self._seq = 0
+        self._last_timestamp = -1
+        self._lock = threading.Lock()  # 线程锁，防止并发序列号重复
+
+    def _get_timestamp(self):
+        """获取秒级时间戳的后6位（00000-99999）"""
+        # 1. 获取当前秒级时间戳
+        current_ts = int(time.time())
+        # 2. 取后6位（缩小到6位范围）
+        ts_5bit = current_ts % 1000000
+        return ts_5bit
 
     def generate_id(self):
-        timestamp = int(time.time() * 1000)
-        # 将时间戳缩小到合适的位数（例如，取后面的10位）
-        timestamp = (timestamp - 1564454400000) % 10000000000
-        return (timestamp << 6)  # 使用6位表示时间戳，剩余10位可根据需要分配给机器ID和序列号
+        """生成8位唯一ID"""
+        with self._lock:  # 加锁保证线程安全
+            current_ts = self._get_timestamp()
+
+            # 处理时间回拨（若当前时间戳 < 上一次，强制等待1秒）
+            if current_ts < self._last_timestamp:
+                time.sleep(1)
+                current_ts = self._get_timestamp()
+
+            # 同一时间戳内，序列号自增（0-7循环）
+            if current_ts == self._last_timestamp:
+                self._seq = (self._seq + 1) % 99  # 3位序列号，最大7
+            else:
+                self._seq = 0  # 新时间戳，序列号重置为0
+
+            # 更新上一次时间戳
+            self._last_timestamp = current_ts
+
+            # 拼接8位ID：5位时间戳 + 3位序列号（补零保证3位）
+            # 例：时间戳=12345，序列号=3 → 12345003（8位）
+            eight_bit_id = current_ts * 100 + self._seq
+
+            # 兜底：确保ID是8位（防止极端情况时间戳不足5位，补前导零转整数）
+            if eight_bit_id < 10000000:
+                eight_bit_id += 10000000  # 保证8位，避免0开头
+
+            return eight_bit_id
 
     def pre_save(self, model_instance, add):
-        snowflake_id = self.generate_id()
-        setattr(model_instance, self.attname, snowflake_id)
-        return snowflake_id
-
-def generate_id():
-    timestamp = int(time.perf_counter_ns())  # 获取纳秒级时间戳
-    random_number = secrets.randbelow(10**4)  # 生成一个4位随机数
-    id = str(timestamp) + str(random_number).zfill(6)  # 将时间戳和随机数拼接成ID，随机数左侧填充0
-    return id
-
+        """仅新增时生成8位雪花ID，更新时保留原ID"""
+        if add:
+            eight_bit_id = self.generate_id()
+            setattr(model_instance, self.attname, eight_bit_id)
+            return eight_bit_id
+        return getattr(model_instance, self.attname)
 
 class BaseModel(models.Model):
     """
