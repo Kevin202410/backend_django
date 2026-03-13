@@ -13,10 +13,54 @@ import ast
 import base64
 import hashlib
 import json
+import openpyxl
+import xlrd
+from io import BytesIO
+from rest_framework.exceptions import ValidationError
 
 # 手机号验证正则
 REGEX_MOBILE = "^1[356789]\d{9}$|^147\d{8}$|^176\d{8}$"
 
+# 定义Excel表头与字段的映射关系
+USER_EXCEL_HEADER_MAP = {
+    '用户名': 'username',
+    '姓名': 'nickname',
+    '身份证号': 'id_card',
+    '手机号(选填)': 'phone',
+    '邮箱(选填)': 'email'
+}
+
+def parse_excel_file(file, sheet_name=None):
+    """
+    解析Excel文件，返回二维列表数据
+    :param file: 上传的文件对象
+    :param sheet_name: 指定sheet名称（默认第一个）
+    :return: list[list] 解析后的数据（跳过表头）
+    """
+    try:
+        # 处理.xlsx格式
+        if file.name.endswith('.xlsx'):
+            wb = openpyxl.load_workbook(BytesIO(file.read()), data_only=True)
+            sheet = wb[sheet_name] if sheet_name else wb.active
+            data = []
+            for row in sheet.iter_rows(min_row=2, values_only=True):  # 跳过表头（第一行）
+                if any(cell is not None for cell in row):  # 跳过空行
+                    data.append(list(row))
+            return data
+        # 处理.xls格式
+        elif file.name.endswith('.xls'):
+            wb = xlrd.open_workbook(file_contents=file.read())
+            sheet = wb.sheet_by_name(sheet_name) if sheet_name else wb.sheet_by_index(0)
+            data = []
+            for row_idx in range(1, sheet.nrows):  # 跳过表头
+                row = sheet.row_values(row_idx)
+                if any(cell is not None and cell != '' for cell in row):
+                    data.append(row)
+            return data
+        else:
+            raise ValidationError("仅支持.xlsx/.xls格式的Excel文件")
+    except Exception as e:
+        raise ValidationError(f"Excel解析失败：{str(e)}")
 
 # 微信GMT+8 转换成标准时间字符串
 def format_wechat_gmt_8_to_normal(wgmt8):

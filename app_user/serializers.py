@@ -42,14 +42,21 @@ class UserCreateSerializer(CustomModelSerializer):
         validators=[CustomUniqueValidator(queryset=Users.objects.all(), message="身份证号必须唯一")]
     )
     phone = serializers.CharField(
+        required=False,  # 非必填
+        allow_blank=True,  # 允许空字符串
+        allow_null=True,  # 允许null
         validators=[CustomUniqueValidator(queryset=Users.objects.all(), message="手机号必须唯一")],
-        allow_blank=True)
+    )
 
 
-    # def validate_phone(self, value):
-    #     if not re.match(REGEX_MOBILE, value):
-    #         raise CustomValidationError('请输入一个有效的手机号码')
-    #     return value
+    def validate_phone(self, value):
+        # 空值直接返回，不校验格式
+        if not value:
+            return value
+        # 非空值才校验格式
+        if not re.match(REGEX_MOBILE, value):
+            raise CustomValidationError('请输入一个有效的手机号码')
+        return value
 
     def create(self, validated_data):
         if 'password' in validated_data.keys():

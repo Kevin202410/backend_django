@@ -23,7 +23,7 @@ class SnowflakeIDField(models.BigIntegerField):
         # 1. 获取当前秒级时间戳
         current_ts = int(time.time())
         # 2. 取后6位（缩小到6位范围）
-        ts_5bit = current_ts % 1000000
+        ts_5bit = current_ts % 100000000
         return ts_5bit
 
     def generate_id(self):
@@ -50,8 +50,8 @@ class SnowflakeIDField(models.BigIntegerField):
             eight_bit_id = current_ts * 100 + self._seq
 
             # 兜底：确保ID是8位（防止极端情况时间戳不足5位，补前导零转整数）
-            if eight_bit_id < 10000000:
-                eight_bit_id += 10000000  # 保证8位，避免0开头
+            if eight_bit_id < 1000000000:
+                eight_bit_id += 1000000000  # 保证8位，避免0开头
 
             return eight_bit_id
 
