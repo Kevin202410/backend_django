@@ -2,7 +2,7 @@
 # 公用方法
 # ------------------------------
 
-import os, re
+import os, re, io
 import random
 import time
 from rest_framework.request import Request
@@ -17,6 +17,11 @@ import openpyxl
 import xlrd
 from io import BytesIO
 from rest_framework.exceptions import ValidationError
+from PIL import Image
+import zipfile
+import os.path as op
+from django.conf import settings
+from django.core.files.uploadedfile import InMemoryUploadedFile
 
 # 手机号验证正则
 REGEX_MOBILE = "^1[356789]\d{9}$|^147\d{8}$|^176\d{8}$"
@@ -29,6 +34,12 @@ USER_EXCEL_HEADER_MAP = {
     '手机号(选填)': 'phone',
     '邮箱(选填)': 'email'
 }
+
+# 图片处理配置
+TARGET_HEIGHT = 1024  # 目标高度
+MAX_FILE_SIZE = 1 * 1024 * 1024  # 1M 上限
+TARGET_FORMAT = 'JPEG'  # 强制转换为JPG
+TARGET_EXT = '.jpg'
 
 def parse_excel_file(file, sheet_name=None):
     """
@@ -269,11 +280,9 @@ def get_parameter_dic(request, *args, **kwargs):
     else:
         return result_data
 
-
 """
 把字符串列表转换成列表类型
 """
-
 
 def srttolist(str):
     # ['http://6fb77aa4dd1d.ngrok.io/media/tasks/2021-08-16/20210816103922_38.png']
@@ -283,7 +292,6 @@ def srttolist(str):
         return str2
     else:
         return []
-
 
 # 获取请求用户的真实ip地址
 def getrealip(request):
@@ -297,14 +305,12 @@ def getrealip(request):
             regip = ""
     return regip
 
-
 # 生成订单号(短订单号)
 def getminrandomodernum():
     basecode = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
     chagecode1 = random.randint(10, 99)
     chagecode3 = str(time.time()).replace('.', '')[-7:]
     return str(basecode) + str(chagecode1) + chagecode3
-
 
 # 生成订单号（长订单号）
 def getrandomodernum():
@@ -313,7 +319,6 @@ def getrandomodernum():
     chagecode2 = random.randint(10, 99)
     chagecode3 = str(time.time()).replace('.', '')[-7:]
     return str(basecode) + str(chagecode1) + str(chagecode2) + chagecode3
-
 
 # 判断是否为金额(不包含0)，（正整数金额，不包含小数点）
 def ismoney(num):
@@ -332,7 +337,6 @@ def ismoney(num):
     except Exception as e:
         return False
 
-
 # 判断是否为正确的价格（正整数、小数（小数点后两位）、非0）
 def isRealPrice(num):
     try:
@@ -348,7 +352,6 @@ def isRealPrice(num):
     except Exception as e:
         return False
 
-
 # 把字符串转换成数组对象等
 def ast_convert(str):
     if str:
@@ -359,7 +362,6 @@ def ast_convert(str):
             return str
 
     return None
-
 
 # 把数组对象转换成字符串转
 def ast_convert_str(arr):
@@ -376,7 +378,6 @@ def ast_convert_str(arr):
 
     return None
 
-
 def bas64_encode_text(text):
     """
     base64加密字符串
@@ -386,7 +387,6 @@ def bas64_encode_text(text):
     if isinstance(text, str):
         return str(base64.b64encode(text.encode('utf-8')), 'utf-8')
     return text
-
 
 def bas64_decode_text(text):
     """
@@ -398,12 +398,10 @@ def bas64_decode_text(text):
         return str(base64.decodebytes(bytes(text, encoding="utf8")), 'utf-8')
     return text
 
-
 def ly_md5(str):
     m = hashlib.md5()
     m.update(str.encode(encoding='utf-8'))
     return m.hexdigest()
-
 
 def re_api(api):
     # 使用正则表达式匹配目标字符串
@@ -412,3 +410,106 @@ def re_api(api):
     if match:
         re_api = match.group(1)
         return re_api
+
+
+def delete_old_file(file_path):
+    """
+    删除旧文件（兼容Django相对路径/绝对路径）
+    :param file_path: 文件路径（user.avatar.path 或 URL相对路径）
+    """
+    if not file_path:
+        return
+    # 转换为绝对路径
+    if not op.isabs(file_path):
+        file_path = op.join(settings.MEDIA_ROOT, file_path)
+    # 存在则删除
+    if op.exists(file_path):
+        try:
+            os.remove(file_path)
+            print(f"[成功] 删除旧文件：{file_path}")
+        except Exception as e:
+            print(f"[失败] 删除旧文件 {file_path} 出错：{str(e)}")
+
+
+def process_image(image_file, target_height=TARGET_HEIGHT, max_size=MAX_FILE_SIZE):
+    """
+    图片标准化处理：
+    1. 转换为JPG格式（处理透明通道）
+    2. 按比例调整高度为1024
+    3. 压缩质量至1M以内
+    :param image_file: 上传的图片文件对象（InMemoryUploadedFile）
+    :return: 处理后的InMemoryUploadedFile对象
+    """
+    try:
+        # 打开图片并处理透明通道
+        img = Image.open(image_file)
+        if img.mode in ('RGBA', 'P', 'L'):  # 处理PNG透明/灰度图
+            img = img.convert('RGB')
+
+        # 按比例缩放（高度固定1024，宽度等比）
+        width, height = img.size
+        ratio = target_height / height
+        new_width = int(width * ratio)
+        img = img.resize((new_width, target_height),
+                         Image.Resampling.LANCZOS)  # 高质量缩放（旧版本用Image.LANCZOS）
+
+        # 动态压缩至1M以内
+        img_byte_arr = io.BytesIO()
+        quality = 95  # 初始质量
+        while True:
+            img_byte_arr.seek(0)
+            img_byte_arr.truncate()  # 清空之前的内容
+            img.save(img_byte_arr, format=TARGET_FORMAT, quality=quality, optimize=True)
+            file_size = img_byte_arr.tell()
+            # 满足大小或质量已到下限则停止
+            if file_size <= max_size or quality <= 10:
+                break
+            quality -= 5  # 每次降低5%质量
+
+        # 构建新的上传文件对象（强制后缀为jpg）
+        new_file_name = f"{op.splitext(image_file.name)[0]}{TARGET_EXT}"
+        processed_file = InMemoryUploadedFile(
+            file=img_byte_arr,
+            field_name=image_file.field_name,
+            name=new_file_name,
+            content_type=f'image/{TARGET_FORMAT.lower()}',
+            size=file_size,
+            charset=None
+        )
+        return processed_file
+    except Exception as e:
+        raise Exception(f"图片处理失败：{str(e)}")
+
+
+def extract_zip_file(zip_file):
+    """
+    解压zip压缩包，返回 {身份证号: 图片文件对象} 映射
+    :param zip_file: 上传的zip文件对象
+    :return: dict
+    """
+    id_card_image_map = {}
+    try:
+        with zipfile.ZipFile(zip_file, 'r') as zf:
+            for file_name in zf.namelist():
+                # 过滤文件夹/非图片文件
+                if file_name.endswith('/') or not file_name.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.gif')):
+                    continue
+                # 提取身份证号（文件名去后缀）
+                id_card = op.splitext(op.basename(file_name))[0].strip()
+                if not id_card:  # 空身份证号跳过
+                    continue
+                # 读取文件内容并构建上传文件对象
+                file_data = zf.read(file_name)
+                file_obj = io.BytesIO(file_data)
+                img_file = InMemoryUploadedFile(
+                    file=file_obj,
+                    field_name='avatar',
+                    name=file_name,
+                    content_type=f'image/{op.splitext(file_name)[1][1:].lower()}',
+                    size=len(file_data),
+                    charset=None
+                )
+                id_card_image_map[id_card] = img_file
+        return id_card_image_map
+    except Exception as e:
+        raise Exception(f"解压压缩包失败：{str(e)}")

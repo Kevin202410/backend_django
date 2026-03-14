@@ -1,3 +1,4 @@
+from django.db import transaction
 from django.http import HttpResponse
 from django.shortcuts import render
 
@@ -11,7 +12,7 @@ from app_user.models import Users
 from app_user.serializers import UserSerializer, UserCreateSerializer, UserResource, UserAvatarSerializer
 from utils.json_response import DetailResponse, ErrorResponse
 from utils.viewset import CustomModelViewSet
-from utils.common import parse_excel_file, USER_EXCEL_HEADER_MAP, rewrite_image_url, get_full_image_url  # 导入Excel解析工具
+from utils.common import parse_excel_file, USER_EXCEL_HEADER_MAP, rewrite_image_url, get_full_image_url, delete_old_file, process_image, extract_zip_file
 import traceback
 
 class UserViewSet(CustomModelViewSet):
@@ -228,62 +229,74 @@ class UserViewSet(CustomModelViewSet):
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         return response
 
-    @action(methods=['post'], detail=False, permission_classes=[IsAuthenticated])
-    def upload_avatar(self, request):
+    @action(methods=["POST"], detail=False, permission_classes=[IsAuthenticated])
+    def batch_import_avatar(self, request):
         """
-        上传用户头像（支持管理员修改任意用户 + 普通用户修改自己）
-        请求方式：POST
-        请求体：
-            1. avatar：图片文件（必传）
-            2. user_id：用户ID（选传，管理员可传，修改指定用户头像；不传默认修改当前登录用户）
+        批量导入用户头像（zip压缩包，内为「身份证号码.图片后缀」的文件）
+        事务原子性：要么全部成功，要么全部回滚
+        无Redis、无Celery，纯Django原生实现
         """
-        # 1. 获取基础参数
-        avatar_file = request.FILES.get('avatar')
-        user_id = request.data.get('user_id')  # 管理员指定要修改的用户ID
         current_user = request.user
+        # 1. 管理员权限校验
+        is_superuser = current_user.is_superuser
+        is_admin = current_user.role.filter(admin=True).exists()
+        if not (is_superuser or is_admin):
+            return ErrorResponse(code=403, msg="仅管理员可批量导入头像")
 
-        # 2. 校验文件必传
-        if not avatar_file:
-            return ErrorResponse(code=400, msg="请上传头像文件")
+        # 2. 校验压缩包
+        if 'file' not in request.FILES:
+            return ErrorResponse(code=400, msg="请上传zip压缩包文件")
+        zip_file = request.FILES['file']
+        if not zip_file.name.lower().endswith('.zip'):
+            return ErrorResponse(code=400, msg="仅支持zip格式的压缩包")
 
-        # 3. 确定要修改头像的目标用户（核心逻辑）
-        target_user = None
-        if user_id:
-            # ==============================================
-            # 场景1：传入了user_id → 仅管理员允许修改他人头像
-            # ==============================================
-            # 校验管理员权限（超级用户 或 角色为管理员）
-            is_superuser = current_user.is_superuser
-            is_admin = current_user.role.filter(admin=True).exists()
+        try:
+            # 3. 解压压缩包
+            id_card_image_map = extract_zip_file(zip_file)
+            if not id_card_image_map:
+                return ErrorResponse(code=400, msg="压缩包内无有效图片文件")
 
-            if not (is_superuser or is_admin):
-                return ErrorResponse(code=403, msg="无权限修改其他用户的头像")
+            success_count = 0
+            fail_count = 0
+            fail_details = []
 
-            # 查询目标用户（排除已删除用户）
-            try:
-                target_user = Users.objects.exclude(is_delete=1).get(id=user_id)
-            except Users.DoesNotExist:
-                return ErrorResponse(code=404, msg="要修改的用户不存在")
-        else:
-            # ==============================================
-            # 场景2：未传user_id → 修改当前登录用户自己的头像
-            # ==============================================
-            target_user = current_user
+            # ===================== 核心：事务包裹（全成功/全回滚） =====================
+            with transaction.atomic():
+                for id_card, img_file in id_card_image_map.items():
+                    try:
+                        # 匹配用户
+                        user = Users.objects.exclude(is_delete=1).get(id_card=id_card)
+                        # 图片标准化处理（转JPG、高1024、≤1M）
+                        processed_img = process_image(img_file)
+                        # 删除旧头像文件
+                        if user.avatar:
+                            delete_old_file(user.avatar.path)
+                        # 保存新头像
+                        user.avatar = processed_img
+                        user.save(update_fields=['avatar'])
+                        success_count += 1
 
-        # 4. 序列化校验 + 保存（传递request上下文，生成跨域完整avatar_url）
-        serializer = UserAvatarSerializer(
-            instance=target_user,
-            data=request.data,
-            partial=True,
-            context={"request": request}  # 必须传，否则头像URL无法生成
-        )
+                    except Users.DoesNotExist:
+                        fail_details.append({
+                            "id_card": id_card, "error": "未找到对应用户"
+                        })
+                        fail_count += 1
+                    except Exception as e:
+                        fail_details.append({
+                            "id_card": id_card, "error": str(e)
+                        })
+                        fail_count += 1
 
-        if serializer.is_valid():
-            serializer.save()
-            return DetailResponse(
-                data={'avatar_url': serializer.data.get('avatar_url')},
-                msg='头像上传成功'
-            )
+                # 只要有失败，立即触发事务回滚
+                if fail_count > 0:
+                    raise Exception(f"检测到 {fail_count} 条异常数据，已回滚所有用户头像修改")
 
-        # 5. 校验失败返回
-        return ErrorResponse(code=400, msg=f'头像上传失败：{serializer.errors}')
+            # 全部成功返回结果
+            return DetailResponse(data={
+                "success_count": success_count,
+                "fail_count": 0,
+                "fail_details": []
+            }, msg=f"批量导入头像成功！共处理 {success_count} 个用户")
+
+        except Exception as e:
+            return ErrorResponse(code=500, msg=f"批量导入失败：{str(e)}")
