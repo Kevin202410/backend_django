@@ -8,10 +8,10 @@ from rest_framework.permissions import IsAuthenticated
 from app_menu.models import Menu
 from app_menu.serializer import  MenuSerializer
 from app_user.models import Users
-from app_user.serializers import UserSerializer, UserCreateSerializer, UserResource
+from app_user.serializers import UserSerializer, UserCreateSerializer, UserResource, UserAvatarSerializer
 from utils.json_response import DetailResponse, ErrorResponse
 from utils.viewset import CustomModelViewSet
-from utils.common import parse_excel_file, USER_EXCEL_HEADER_MAP  # 导入Excel解析工具
+from utils.common import parse_excel_file, USER_EXCEL_HEADER_MAP, rewrite_image_url, get_full_image_url  # 导入Excel解析工具
 import traceback
 
 class UserViewSet(CustomModelViewSet):
@@ -20,7 +20,7 @@ class UserViewSet(CustomModelViewSet):
     create_serializer_class = UserCreateSerializer
     update_serializer_class = UserCreateSerializer
     filterset_fields = ['status', 'phone', 'role', 'dept']
-    search_fields = ["username", "nickname"]
+    search_fields = ["username", "nickname", "id_card"]
 
     @action(methods=["POST"], detail=False, permission_classes=[IsAuthenticated])
     def import_from_excel(self, request):
@@ -96,6 +96,11 @@ class UserViewSet(CustomModelViewSet):
         user = request.user
 
         result = {}
+        # ========== 核心：生成跨域头像完整URL ==========
+        avatar_url = None
+        if user.avatar:
+            relative_url = rewrite_image_url(request, user.avatar.url)
+            avatar_url = get_full_image_url(request, relative_url)
         result['user'] = {
             "userId": user.id,
             "username": user.username,
@@ -103,7 +108,7 @@ class UserViewSet(CustomModelViewSet):
             "phone": user.phone,
             "gender": user.gender,
             "email": user.email,
-            "avatar": user.avatar,
+            "avatar": avatar_url,  # 返回完整跨域URL
             "dept": user.dept_id,
             "remark": user.remark,
             "is_superuser": user.is_superuser,
@@ -189,11 +194,17 @@ class UserViewSet(CustomModelViewSet):
         获取当前用户信息
         """
         user = request.user
+        # 生成跨域头像URL
+        avatar_url = None
+        if user.avatar:
+            relative_url = rewrite_image_url(request, user.avatar.url)
+            avatar_url = get_full_image_url(request, relative_url)
+
         result = {
             "nickname": user.nickname,
             "phone": user.phone,
             "gender": user.gender,
-            "email": user.email
+            "email": avatar_url  # 统一字段
         }
         return DetailResponse(data=result, msg="获取成功")
 
@@ -216,3 +227,63 @@ class UserViewSet(CustomModelViewSet):
         response = HttpResponse(dataset.xls, content_type='application/vnd.ms-excel')
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         return response
+
+    @action(methods=['post'], detail=False, permission_classes=[IsAuthenticated])
+    def upload_avatar(self, request):
+        """
+        上传用户头像（支持管理员修改任意用户 + 普通用户修改自己）
+        请求方式：POST
+        请求体：
+            1. avatar：图片文件（必传）
+            2. user_id：用户ID（选传，管理员可传，修改指定用户头像；不传默认修改当前登录用户）
+        """
+        # 1. 获取基础参数
+        avatar_file = request.FILES.get('avatar')
+        user_id = request.data.get('user_id')  # 管理员指定要修改的用户ID
+        current_user = request.user
+
+        # 2. 校验文件必传
+        if not avatar_file:
+            return ErrorResponse(code=400, msg="请上传头像文件")
+
+        # 3. 确定要修改头像的目标用户（核心逻辑）
+        target_user = None
+        if user_id:
+            # ==============================================
+            # 场景1：传入了user_id → 仅管理员允许修改他人头像
+            # ==============================================
+            # 校验管理员权限（超级用户 或 角色为管理员）
+            is_superuser = current_user.is_superuser
+            is_admin = current_user.role.filter(admin=True).exists()
+
+            if not (is_superuser or is_admin):
+                return ErrorResponse(code=403, msg="无权限修改其他用户的头像")
+
+            # 查询目标用户（排除已删除用户）
+            try:
+                target_user = Users.objects.exclude(is_delete=1).get(id=user_id)
+            except Users.DoesNotExist:
+                return ErrorResponse(code=404, msg="要修改的用户不存在")
+        else:
+            # ==============================================
+            # 场景2：未传user_id → 修改当前登录用户自己的头像
+            # ==============================================
+            target_user = current_user
+
+        # 4. 序列化校验 + 保存（传递request上下文，生成跨域完整avatar_url）
+        serializer = UserAvatarSerializer(
+            instance=target_user,
+            data=request.data,
+            partial=True,
+            context={"request": request}  # 必须传，否则头像URL无法生成
+        )
+
+        if serializer.is_valid():
+            serializer.save()
+            return DetailResponse(
+                data={'avatar_url': serializer.data.get('avatar_url')},
+                msg='头像上传成功'
+            )
+
+        # 5. 校验失败返回
+        return ErrorResponse(code=400, msg=f'头像上传失败：{serializer.errors}')

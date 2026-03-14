@@ -15,7 +15,7 @@ import platform
 
 from decouple import Config, RepositoryEnv
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
+# 像这样在项目内部构建路径: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 CASBIN_MODEL = os.path.join(BASE_DIR, "model.conf")
 
@@ -32,12 +32,12 @@ REDIS_URL = config("REDIS_URL")
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
+# 安全警告：请将生产中使用的密钥保密！
 SECRET_KEY = 'django-insecure-2)8w-=^^xw!=+)id6+#o2yfn2h12wstw!hi-e^41)jyp!o^4!w'
 
-# SECURITY WARNING: don't run with debug turned on in production!
+# 安全警告：不要在生产环境中打开调试开关运行！
 DEBUG = config("DEBUG")
-
+# 允许使用通道的客户端
 ALLOWED_HOSTS = ["*"]
 
 # Application definition
@@ -80,7 +80,7 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',  # 跨域中间件
-    'django.middleware.common.CommonMiddleware',
+    'django.middleware.common.CommonMiddleware',  # 通用中间件
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
@@ -192,7 +192,7 @@ STATICFILES_DIRS = (
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # ================================================= #
-# *************** REST_FRAMEWORK配置 *************** #
+# *************** REST_FRAMEWORK配置 其他框架*************** #
 # ================================================= #
 
 REST_FRAMEWORK = {
@@ -469,4 +469,11 @@ API_MODEL_MAP = {
     "/login/": "登录模块",
     "/system/user/auth/": "获取用户个人权限",
 }
-IS_SINGLE_TOKEN = True  # 是否只允许单用户单一地点登录(只有一个人在线上)(默认多地点登录),只针对后台用户生效
+IS_SINGLE_TOKEN = False  # 是否只允许单用户单一地点登录(只有一个人在线上)(默认多地点登录),只针对后台用户生效
+
+# 配置媒体文件（头像存储路径）
+MEDIA_URL = '/media/'  # 媒体文件访问前缀
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')  # 本地存储根目录
+# 确保media目录存在（可添加初始化逻辑）
+if not os.path.exists(MEDIA_ROOT):
+    os.makedirs(MEDIA_ROOT)

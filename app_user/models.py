@@ -21,7 +21,13 @@ class Users(BaseModel, AbstractUser):
     employee_no = models.CharField(max_length=150, unique=True, db_index=True, null=True, blank=True, verbose_name="用户工号", help_text="工号")
     email = models.EmailField(max_length=255, verbose_name="邮箱", null=True, blank=True, help_text="邮箱")
     phone = models.CharField(max_length=255, verbose_name="手机号", null=True, blank=True, help_text="手机号")
-    avatar = models.CharField(max_length=255, verbose_name="头像", null=True, blank=True, help_text="头像")
+    avatar = models.FileField(
+        upload_to='avatars/',  # 头像存储在media/avatars/目录下
+        verbose_name='头像',
+        null=True,
+        blank=True,
+        help_text="头像"
+    )
     GENDER_CHOICES = (
         ('0', "男"),
         ('1', "女"),

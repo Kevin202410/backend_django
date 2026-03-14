@@ -1,4 +1,4 @@
-import re
+import re, os
 from import_export.fields import Field
 from import_export import resources
 from import_export.widgets import ManyToManyWidget, ForeignKeyWidget
@@ -8,7 +8,7 @@ from app_post.models import Post
 from app_role.models import Role
 from app_dept.models import Dept
 from app_user.models import Users
-from utils.common import REGEX_MOBILE
+from utils.common import REGEX_MOBILE, renameuploadimg, get_full_image_url, rewrite_image_url
 from utils.serializers import CustomModelSerializer
 from utils.validator import CustomUniqueValidator, CustomValidationError
 from utils.id_card_utlis import validate_id_card
@@ -112,3 +112,46 @@ class UserResource(resources.ModelResource):
         fields = ('id', 'status', 'username', 'nickname', 'employee_no', 'email', 'phone', 'gender', 'post', 'role', 'dept', 'remark',
                   'id_card', 'update_datetime', 'create_datetime')
         export_order = fields
+
+class UserAvatarSerializer(serializers.ModelSerializer):
+    """用户头像序列化器（处理上传/读取）"""
+    # 序列化时返回完整的头像URL（跨域可访问）
+    avatar_url = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = Users
+        fields = ['id', 'avatar', 'avatar_url']
+        extra_kwargs = {
+            'avatar': {'write_only': True}  # 头像文件仅用于上传，返回时用avatar_url
+        }
+
+    def get_avatar_url(self, obj):
+        """
+        整合common工具函数，返回跨域可访问的完整头像URL
+        :param obj: User实例
+        :return: 完整URL（如https://xxx.com/media/avatars/20240520102030_123.png）
+        """
+        if not obj.avatar:
+            return None
+        # 1. 获取request对象（用于拼接域名）
+        request = self.context.get('request')
+        # 2. 先重写URL（移除旧环境域名，保留相对路径）
+        relative_url = rewrite_image_url(request, obj.avatar.url)
+        # 3. 补全完整域名（支持跨域访问）
+        full_url = get_full_image_url(request, relative_url)
+        return full_url
+
+    def validate_avatar(self, value):
+        """验证头像文件格式/大小"""
+        # 允许的文件格式
+        allowed_extensions = ['.jpg', '.jpeg', '.png', '.gif']
+        ext = os.path.splitext(value.name)[1].lower()
+        if ext not in allowed_extensions:
+            raise serializers.ValidationError("仅支持jpg/jpeg/png/gif格式的头像文件")
+        # 限制文件大小（5MB）
+        max_size = 5 * 1024 * 1024
+        if value.size > max_size:
+            raise serializers.ValidationError("头像文件大小不能超过5MB")
+        # 调用common的重命名函数，自定义头像文件名
+        value.name = renameuploadimg(value.name)
+        return value

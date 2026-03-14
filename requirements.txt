@@ -96,4 +96,4 @@ websocket-client==0.59.0
 websockets==10.4
 zope.interface==6.0
 eventlet==0.33.3
-django-import-export
+django-import-export~=4.4.0

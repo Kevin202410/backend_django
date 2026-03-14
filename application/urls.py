@@ -16,7 +16,8 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
-
+from django.conf import settings
+from django.conf.urls.static import static
 from app_login.views import CaptchaView, LoginView
 
 urlpatterns = [
@@ -35,3 +36,6 @@ urlpatterns = [
     path('job/crontab/', include('app_crontab.urls')),
     path('tool/', include('app_monitor.urls')),
 ]
+# ✅ 关键：开发环境开放媒体文件访问（修复404）
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
