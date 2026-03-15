@@ -1,31 +1,39 @@
 # ------------------------------
 # 公用方法
 # ------------------------------
-
-import os, re, io
+#/utils/common.py
+import os
+import re
+import io
 import random
 import time
-from rest_framework.request import Request
-from django.http import QueryDict
-from urllib.parse import urlparse
-import datetime
 import ast
 import base64
 import hashlib
 import json
-import openpyxl
-import xlrd
-from io import BytesIO
-from rest_framework.exceptions import ValidationError
-from PIL import Image
 import zipfile
 import os.path as op
+import datetime
+from urllib.parse import urlparse
+from io import BytesIO
+from PIL import Image
 from django.conf import settings
 from django.core.files.uploadedfile import InMemoryUploadedFile
+from rest_framework.request import Request
+from django.http import QueryDict
+from rest_framework.exceptions import ValidationError
+import openpyxl
+import xlrd
 
-# 手机号验证正则
-REGEX_MOBILE = "^1[356789]\d{9}$|^147\d{8}$|^176\d{8}$"
+# ------------------------------
+# 正则常量
+# ------------------------------
+# 手机号验证正则（统一正则，避免重复定义）
+REGEX_MOBILE = re.compile(r"^1[356789]\d{9}$|^147\d{8}$|^176\d{8}$")
 
+# ------------------------------
+# Excel配置
+# ------------------------------
 # 定义Excel表头与字段的映射关系
 USER_EXCEL_HEADER_MAP = {
     '用户名': 'username',
@@ -35,12 +43,17 @@ USER_EXCEL_HEADER_MAP = {
     '邮箱(选填)': 'email'
 }
 
+# ------------------------------
 # 图片处理配置
+# ------------------------------
 TARGET_HEIGHT = 1024  # 目标高度
 MAX_FILE_SIZE = 1 * 1024 * 1024  # 1M 上限
 TARGET_FORMAT = 'JPEG'  # 强制转换为JPG
 TARGET_EXT = '.jpg'
 
+# ------------------------------
+# Excel解析
+# ------------------------------
 def parse_excel_file(file, sheet_name=None):
     """
     解析Excel文件，返回二维列表数据
@@ -73,9 +86,12 @@ def parse_excel_file(file, sheet_name=None):
     except Exception as e:
         raise ValidationError(f"Excel解析失败：{str(e)}")
 
-# 微信GMT+8 转换成标准时间字符串
+# ------------------------------
+# 时间格式化
+# ------------------------------
 def format_wechat_gmt_8_to_normal(wgmt8):
     """
+    微信GMT+8 转换成标准时间字符串
     wgmt8:2022-01-12T16:35:42+08:00
     return:2022-01-12 16:35:42
     """
@@ -84,425 +100,225 @@ def format_wechat_gmt_8_to_normal(wgmt8):
         a2 = a1[1].split('+')
         a3 = a1[0] + ' ' + a2[0]
         return a3
-    except Exception as e:
+    except Exception:
         return wgmt8
-
-
-# 随机生成6位大写的邀请码:8614LY
-def getinvitecode6():
-    random_str = getRandomSet(6)
-    return random_str.upper()
-
-
-# 生成随机得指定位数字母+数字字符串
-def getRandomSet(bits):
-    """
-    bits:数字是几就生成几位
-    """
-    num_set = [chr(i) for i in range(48, 58)]
-    char_set = [chr(i) for i in range(97, 123)]
-    total_set = num_set + char_set
-    value_set = "".join(random.sample(total_set, bits))
-    return value_set
-
-
-def hide4mobile(mobile):
-    """
-    隐藏手机号中间四位
-    """
-    if re.match("^\d{11}$", mobile):
-        list = mobile[3:7]
-        new_phone = mobile.replace(list, '****')
-        return new_phone
-    else:
-        return ""
-
-
-def float2dot(str):
-    """
-    把数字或字符串10.00 转换成保留后两位（字符串）输出
-    """
-    try:
-        return '%.2f' % round(float(str), 2)
-    except:
-        return str
-
-
-"""
-格式化日期时间为指定格式
-"""
-
 
 def formatdatetime(datatimes):
     """
     格式化日期时间为指定格式
-    :param datatimes: 数据库中存储的datetime日期时间,也可以是字符串形式(2021-09-23 11:22:03.1232000)
-    :return: 格式化后的日期时间如：2021-09-23 11:22:03
+    :param datatimes: 数据库中存储的datetime日期时间/字符串
+    :return: 格式化后的日期时间：2021-09-23 11:22:03
     """
-    if datatimes:
-        try:
-            if isinstance(datatimes, str):
-                if "." in datatimes:
-                    arrays = datatimes.split(".", maxsplit=1)
-                    if arrays:
-                        return arrays[0]
-            return datatimes.strftime('%Y-%m-%d %H:%M:%S')
-        except Exception as e:
-            return datatimes
-    return datatimes
-
+    if not datatimes:
+        return datatimes
+    try:
+        if isinstance(datatimes, str):
+            return datatimes.split(".")[0] if "." in datatimes else datatimes
+        return datatimes.strftime('%Y-%m-%d %H:%M:%S')
+    except Exception:
+        return datatimes
 
 def formatdatetime_convert(datatimes):
     """
-    格式化字符串日期时间为 python的日期时间
-    :param datatimes: 字符串形式(2021-09-23 11:22:03 或 2021-09-23)
-    :return: 反格式化后的日期时间如：datetime.datetime(2021, 9, 23, 11, 22, 3)
+    格式化字符串日期为Python datetime对象（修复原代码变量错误）
+    :param datatimes: 字符串(2021-09-23 11:22:03 / 2021-09-23)
+    :return: datetime对象
     """
-    if datatimes:
-        try:
-            if isinstance(datatimes, str):
-                if ':' in datatimes:
-                    return datetime.datetime.strptime('datatimes', '%Y-%m-%d %H:%M:%S')
-                else:
-                    return datetime.datetime.strptime('datatimes', '%Y-%m-%d')
-        except Exception as e:
-            return datatimes
-    return datatimes
-
-
-# 上传图片名自定义
-"""
-参数为图片文件名
-"""
-
-
-def renameuploadimg(srcimg):
-    # 文件扩展名
-    ext = os.path.splitext(srcimg)[1]
-    # File names longer than 255 characters can cause problems on older OSes.
-    if len(srcimg) > 255:
-        ext = ext[:255]
-    # 定义文件名，年月日时分秒随机数
-    fn = time.strftime('%Y%m%d%H%M%S')
-    fn = fn + '_%d' % random.randint(100, 999)
-    # 重写合成文件名
-    name = fn + ext
-    return name
-
-
-# 获取请求的域名包括http或https前缀如：https://www.xxx.cn
-"""
-参数requests为请求request
-"""
-
-
-def getfulldomian(requests):
-    host = '{scheme}://{host}'.format(scheme=requests.scheme, host=requests.get_host())
-    return host
-
-
-"""
-获取url地址中的path部分
-"""
-
-
-def geturlpath(url):
-    # ParseResult(scheme='https', netloc='blog.xxx.net', path='/yilovexing/article/details/96432467', params='', query='', fragment='')
-    all = urlparse(url)
-    path = all.path
-    return path
-
-
-"""
-重写数据库中的图片url前缀路径，返回相对路径的url路径，保证服务器更换环境导致图片访问失败情况
-适用于图片存储在服务器本地
-"""
-
-
-def rewrite_image_url(request, url):
-    """
-    :param request: 用户请求request
-    :param url: 图片url原路径
-    :return: 图片url新路径
-    """
-    if '://' in url and 'http' in url and '127.0.0.1':
-
-        fulldomain = getfulldomian(request)
-        urlpath = geturlpath(url)
-        # return fulldomain+urlpath
-        return urlpath
-    else:
-        return url
-
-
-def get_full_image_url(request, url):
-    """
-    :param request: 用户请求request
-    :param url: 图片url原路径
-    :return: 图片url新路径
-    """
-    if not url:
-        return url
-    elif 'http://' not in url and 'https://' not in url:
-
-        fulldomain = getfulldomian(request)
-        return fulldomain + url
-    else:
-        return url
-
-
-# 验证是否为有效手机号
-def checkphonenum(phonenum):
-    mobile_pat = re.compile('^1([38]\d|5[0-35-9]|7[3678])\d{8}$')
-    res = re.search(mobile_pat, phonenum)
-    if res:
-        return True
-    else:
-        return False
-
-
-# 获取get 或 post的参数
-# 使用方法：get_parameter_dic(request)['name'] ,name为获取的参数名 ,此种方式获取name不存在则会报错返回name表示name不存在，需要此参数
-# get_parameter_dic(request).get('name') ,name为获取的参数名 ,此种方式获取name不存在不会报错，不存在会返回None
-def get_parameter_dic(request, *args, **kwargs):
-    if isinstance(request, Request) == False:
-        return {}
-
-    query_params = request.query_params
-    if isinstance(query_params, QueryDict):
-        query_params = query_params.dict()
-    result_data = request.data
-    if isinstance(result_data, QueryDict):
-        result_data = result_data.dict()
-
-    if query_params != {}:
-        return query_params
-    else:
-        return result_data
-
-"""
-把字符串列表转换成列表类型
-"""
-
-def srttolist(str):
-    # ['http://6fb77aa4dd1d.ngrok.io/media/tasks/2021-08-16/20210816103922_38.png']
-    if str:
-        str1 = str.replace('[', '').replace(']', '').replace("\"", '').replace("\'", '')
-        str2 = str1.split(',')
-        return str2
-    else:
-        return []
-
-# 获取请求用户的真实ip地址
-def getrealip(request):
+    if not datatimes or not isinstance(datatimes, str):
+        return datatimes
     try:
-        real_ip = request.META['HTTP_X_FORWARDED_FOR']
-        regip = real_ip.split(",")[0]
-    except:
-        try:
-            regip = request.META['REMOTE_ADDR']
-        except:
-            regip = ""
-    return regip
+        fmt = '%Y-%m-%d %H:%M:%S' if ':' in datatimes else '%Y-%m-%d'
+        return datetime.datetime.strptime(datatimes, fmt)
+    except Exception:
+        return datatimes
 
-# 生成订单号(短订单号)
+# ------------------------------
+# 随机字符串/邀请码/订单号
+# ------------------------------
+def getRandomSet(bits):
+    """生成指定位数 数字+小写字母 随机字符串"""
+    num_set = [chr(i) for i in range(48, 58)]
+    char_set = [chr(i) for i in range(97, 123)]
+    total_set = num_set + char_set
+    return "".join(random.sample(total_set, bits))
+
+def getinvitecode6():
+    """随机生成6位大写邀请码:8614LY"""
+    return getRandomSet(6).upper()
+
 def getminrandomodernum():
+    """生成短订单号"""
     basecode = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
     chagecode1 = random.randint(10, 99)
     chagecode3 = str(time.time()).replace('.', '')[-7:]
-    return str(basecode) + str(chagecode1) + chagecode3
+    return f"{basecode}{chagecode1}{chagecode3}"
 
-# 生成订单号（长订单号）
 def getrandomodernum():
+    """生成长订单号"""
     basecode = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
     chagecode1 = random.randint(100, 999)
     chagecode2 = random.randint(10, 99)
     chagecode3 = str(time.time()).replace('.', '')[-7:]
-    return str(basecode) + str(chagecode1) + str(chagecode2) + chagecode3
+    return f"{basecode}{chagecode1}{chagecode2}{chagecode3}"
 
-# 判断是否为金额(不包含0)，（正整数金额，不包含小数点）
-def ismoney(num):
+# ------------------------------
+# 手机号处理
+# ------------------------------
+def hide4mobile(mobile):
+    """隐藏手机号中间四位"""
+    if re.match(r"^\d{11}$", mobile):
+        return mobile.replace(mobile[3:7], '****')
+    return ""
+
+def checkphonenum(phonenum):
+    """验证是否为有效手机号（复用统一正则）"""
+    if not phonenum:
+        return False
+    return bool(REGEX_MOBILE.match(phonenum))
+
+# ------------------------------
+# 数值/金额格式化
+# ------------------------------
+def float2dot(str_num):
+    """数字转为保留两位小数的字符串"""
     try:
-        pattern = re.compile(r'^[0-9]\d*$')
+        return '%.2f' % round(float(str_num), 2)
+    except:
+        return str_num
+
+def ismoney(num):
+    """判断是否为正整数金额（不含0、小数点）"""
+    try:
         if not num:
             return False
         val = int(num)
-        if val <= 0:
-            return False
-        result = pattern.match(num)
-        if result:
-            return True
-        else:
-            return False
-    except Exception as e:
+        return val > 0 and re.match(r'^[0-9]\d*$', str(num)) is not None
+    except:
         return False
 
-# 判断是否为正确的价格（正整数、小数（小数点后两位）、非0）
 def isRealPrice(num):
+    """判断是否为合法价格（正整数/两位小数、非0）"""
     try:
-        if num == "" or num == None or num == 0 or num == '0':
+        if not num or num in (0, '0', ''):
             return False
-        value = str(num)
-        pattern = re.compile(r"(^[0-9]\d*$)|(^(([1-9]{1}\d*)|(0{1}))(\.\d{0,2})?$)")  # 正整数判断和小数判断
-        result = pattern.match(value)
-        if result:
-            return True
-        else:
-            return False
-    except Exception as e:
+        pattern = re.compile(r"(^[1-9]\d*$)|(^([1-9]\d*|0)(\.\d{1,2})?$)")
+        return bool(pattern.match(str(num)))
+    except:
         return False
 
-# 把字符串转换成数组对象等
-def ast_convert(str):
-    if str:
-        try:
-            myobject = ast.literal_eval(str)
-            return myobject
-        except Exception as e:
-            return str
+# ------------------------------
+# 文件/图片/URL处理
+# ------------------------------
+def renameuploadimg(srcimg):
+    """自定义上传图片文件名：时间戳+随机数"""
+    ext = os.path.splitext(srcimg)[1]
+    ext = ext[:255] if len(srcimg) > 255 else ext
+    fn = f"{time.strftime('%Y%m%d%H%M%S')}_{random.randint(100, 999)}"
+    return fn + ext
 
-    return None
+def getfulldomian(requests):
+    """获取请求完整域名（http/https + host）"""
+    return '{scheme}://{host}'.format(scheme=requests.scheme, host=requests.get_host())
 
-# 把数组对象转换成字符串转
-def ast_convert_str(arr):
-    if arr:
-        try:
-            if isinstance(arr, str):
-                return arr
-            if isinstance(arr, dict):
-                return json.dumps(arr)
-            if isinstance(arr, list):
-                return json.dumps(arr)
-        except Exception as e:
-            return arr
+def geturlpath(url):
+    """获取URL的path部分"""
+    return urlparse(url).path
 
-    return None
+def rewrite_image_url(request, url):
+    """重写图片URL为相对路径（适配服务器迁移）"""
+    if url and '://' in url and '127.0.0.1' in url:
+        return geturlpath(url)
+    return url
 
-def bas64_encode_text(text):
-    """
-    base64加密字符串
-    :param text:
-    :return:
-    """
-    if isinstance(text, str):
-        return str(base64.b64encode(text.encode('utf-8')), 'utf-8')
-    return text
-
-def bas64_decode_text(text):
-    """
-    base64解密字符串
-    :param text:
-    :return:
-    """
-    if isinstance(text, str):
-        return str(base64.decodebytes(bytes(text, encoding="utf8")), 'utf-8')
-    return text
-
-def ly_md5(str):
-    m = hashlib.md5()
-    m.update(str.encode(encoding='utf-8'))
-    return m.hexdigest()
-
-def re_api(api):
-    # 使用正则表达式匹配目标字符串
-    match = re.match(r'(/[^?]+)', api)
-
-    if match:
-        re_api = match.group(1)
-        return re_api
-
+def get_full_image_url(request, url):
+    """获取图片完整URL（跨域可用）"""
+    if not url:
+        return url
+    if 'http://' not in url and 'https://' not in url:
+        return f"{getfulldomian(request)}{url}"
+    return url
 
 def delete_old_file(file_path):
-    """
-    删除旧文件（兼容Django相对路径/绝对路径）
-    :param file_path: 文件路径（user.avatar.path 或 URL相对路径）
-    """
+    """删除旧文件（兼容相对/绝对路径）"""
     if not file_path:
         return
-    # 转换为绝对路径
     if not op.isabs(file_path):
         file_path = op.join(settings.MEDIA_ROOT, file_path)
-    # 存在则删除
     if op.exists(file_path):
         try:
             os.remove(file_path)
-            print(f"[成功] 删除旧文件：{file_path}")
         except Exception as e:
             print(f"[失败] 删除旧文件 {file_path} 出错：{str(e)}")
 
-
 def process_image(image_file, target_height=TARGET_HEIGHT, max_size=MAX_FILE_SIZE):
     """
-    图片标准化处理：
-    1. 转换为JPG格式（处理透明通道）
-    2. 按比例调整高度为1024
-    3. 压缩质量至1M以内
-    :param image_file: 上传的图片文件对象（InMemoryUploadedFile）
-    :return: 处理后的InMemoryUploadedFile对象
+    图片标准化处理：转JPG、等比缩放、压缩至1M内
+    :param image_file: 上传的图片文件
+    :return: 处理后的InMemoryUploadedFile
     """
     try:
-        # 打开图片并处理透明通道
         img = Image.open(image_file)
-        if img.mode in ('RGBA', 'P', 'L'):  # 处理PNG透明/灰度图
+        # 处理透明通道/灰度图
+        if img.mode in ('RGBA', 'P', 'L'):
             img = img.convert('RGB')
 
-        # 按比例缩放（高度固定1024，宽度等比）
+        # 等比缩放
         width, height = img.size
         ratio = target_height / height
         new_width = int(width * ratio)
-        img = img.resize((new_width, target_height),
-                         Image.Resampling.LANCZOS)  # 高质量缩放（旧版本用Image.LANCZOS）
+        # 兼容PIL高低版本
+        resample = Image.Resampling.LANCZOS if hasattr(Image, 'Resampling') else Image.LANCZOS
+        img = img.resize((new_width, target_height), resample=resample)
 
-        # 动态压缩至1M以内
+        # 动态压缩质量
         img_byte_arr = io.BytesIO()
-        quality = 95  # 初始质量
+        quality = 95
         while True:
             img_byte_arr.seek(0)
-            img_byte_arr.truncate()  # 清空之前的内容
+            img_byte_arr.truncate()
             img.save(img_byte_arr, format=TARGET_FORMAT, quality=quality, optimize=True)
-            file_size = img_byte_arr.tell()
-            # 满足大小或质量已到下限则停止
-            if file_size <= max_size or quality <= 10:
+            if img_byte_arr.tell() <= max_size or quality <= 10:
                 break
-            quality -= 5  # 每次降低5%质量
+            quality -= 5
 
-        # 构建新的上传文件对象（强制后缀为jpg）
-        new_file_name = f"{op.splitext(image_file.name)[0]}{TARGET_EXT}"
-        processed_file = InMemoryUploadedFile(
+        # 构建新文件对象
+        new_name = f"{op.splitext(image_file.name)[0]}{TARGET_EXT}"
+        return InMemoryUploadedFile(
             file=img_byte_arr,
             field_name=image_file.field_name,
-            name=new_file_name,
+            name=new_name,
             content_type=f'image/{TARGET_FORMAT.lower()}',
-            size=file_size,
+            size=img_byte_arr.tell(),
             charset=None
         )
-        return processed_file
     except Exception as e:
         raise Exception(f"图片处理失败：{str(e)}")
 
-
+# ------------------------------
+# 压缩包处理
+# ------------------------------
 def extract_zip_file(zip_file):
     """
-    解压zip压缩包，返回 {身份证号: 图片文件对象} 映射
-    :param zip_file: 上传的zip文件对象
+    解压zip，返回 {身份证号: 图片文件对象} 映射
+    :param zip_file: 上传的zip文件
     :return: dict
     """
     id_card_image_map = {}
+    img_suffix = ('.png', '.jpg', '.jpeg', '.bmp', '.gif')
     try:
         with zipfile.ZipFile(zip_file, 'r') as zf:
             for file_name in zf.namelist():
-                # 过滤文件夹/非图片文件
-                if file_name.endswith('/') or not file_name.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.gif')):
+                # 过滤目录/非图片文件
+                if file_name.endswith('/') or not file_name.lower().endswith(img_suffix):
                     continue
                 # 提取身份证号（文件名去后缀）
                 id_card = op.splitext(op.basename(file_name))[0].strip()
-                if not id_card:  # 空身份证号跳过
+                if not id_card:
                     continue
-                # 读取文件内容并构建上传文件对象
+                # 构建文件对象
                 file_data = zf.read(file_name)
-                file_obj = io.BytesIO(file_data)
                 img_file = InMemoryUploadedFile(
-                    file=file_obj,
+                    file=io.BytesIO(file_data),
                     field_name='avatar',
                     name=file_name,
                     content_type=f'image/{op.splitext(file_name)[1][1:].lower()}',
@@ -513,3 +329,62 @@ def extract_zip_file(zip_file):
         return id_card_image_map
     except Exception as e:
         raise Exception(f"解压压缩包失败：{str(e)}")
+
+# ------------------------------
+# 请求参数/IP处理
+# ------------------------------
+def get_parameter_dic(request, *args, **kwargs):
+    """统一获取GET/POST参数"""
+    if not isinstance(request, Request):
+        return {}
+    query_params = request.query_params.dict() if isinstance(request.query_params, QueryDict) else request.query_params
+    result_data = request.data.dict() if isinstance(request.data, QueryDict) else request.data
+    return query_params if query_params else result_data
+
+def getrealip(request):
+    """获取用户真实IP"""
+    try:
+        return request.META['HTTP_X_FORWARDED_FOR'].split(",")[0]
+    except:
+        return request.META.get('REMOTE_ADDR', "")
+
+# ------------------------------
+# 加密/类型转换
+# ------------------------------
+def bas64_encode_text(text):
+    """base64加密字符串"""
+    return str(base64.b64encode(text.encode('utf-8')), 'utf-8') if isinstance(text, str) else text
+
+def bas64_decode_text(text):
+    """base64解密字符串"""
+    return str(base64.decodebytes(bytes(text, "utf8")), 'utf8') if isinstance(text, str) else text
+
+def ly_md5(text):
+    """MD5加密"""
+    m = hashlib.md5()
+    m.update(text.encode('utf-8'))
+    return m.hexdigest()
+
+def ast_convert(text):
+    """字符串转列表/字典"""
+    return ast.literal_eval(text) if text else None
+
+def ast_convert_str(arr):
+    """列表/字典转字符串"""
+    if not arr:
+        return None
+    if isinstance(arr, (dict, list)):
+        return json.dumps(arr, ensure_ascii=False)
+    return str(arr)
+
+def srttolist(str_data):
+    """字符串列表转列表"""
+    if not str_data:
+        return []
+    str1 = str_data.replace('[', '').replace(']', '').replace('"', '').replace("'", '')
+    return str1.split(',') if str1 else []
+
+def re_api(api):
+    """提取API路径（去除参数）"""
+    match = re.match(r'(/[^?]+)', api)
+    return match.group(1) if match else api

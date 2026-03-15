@@ -1,70 +1,62 @@
+import traceback
+from rest_framework.parsers import MultiPartParser, FormParser
 from django.db import transaction
 from django.http import HttpResponse
-from django.shortcuts import render
-
-# Create your views here.
 from django.utils import timezone
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from app_menu.models import Menu
-from app_menu.serializer import  MenuSerializer
+from app_menu.serializer import MenuSerializer
 from app_user.models import Users
 from app_user.serializers import UserSerializer, UserCreateSerializer, UserResource, UserAvatarSerializer
 from utils.json_response import DetailResponse, ErrorResponse
 from utils.viewset import CustomModelViewSet
-from utils.common import parse_excel_file, USER_EXCEL_HEADER_MAP, rewrite_image_url, get_full_image_url, delete_old_file, process_image, extract_zip_file
-import traceback
+from utils.common import (
+    parse_excel_file, USER_EXCEL_HEADER_MAP, delete_old_file,
+    process_image, extract_zip_file, rewrite_image_url, get_full_image_url, renameuploadimg
+)
 
 class UserViewSet(CustomModelViewSet):
-    queryset = Users.objects.exclude(is_delete=1).all()
+    queryset = Users.objects.exclude(is_delete=1)
     serializer_class = UserSerializer
     create_serializer_class = UserCreateSerializer
     update_serializer_class = UserCreateSerializer
     filterset_fields = ['status', 'phone', 'role', 'dept']
     search_fields = ["username", "nickname", "id_card"]
+    parser_classes = (MultiPartParser, FormParser)  # 支持文件上传解析器
+
+    def _get_user_avatar_url(self, request, user):
+        """抽取私有方法：获取用户完整头像URL（复用代码）"""
+        if not user.avatar:
+            return None
+        relative_url = rewrite_image_url(request, user.avatar.url)
+        return get_full_image_url(request, relative_url)
 
     @action(methods=["POST"], detail=False, permission_classes=[IsAuthenticated])
     def import_from_excel(self, request):
-        """
-        批量导入用户（Excel文件）
-        请求参数：file（Excel文件）
-        返回：导入结果（成功数、失败数、失败详情）
-        """
-        # 1. 校验文件是否上传
+        """Excel批量导入用户"""
         if 'file' not in request.FILES:
-            return ErrorResponse(code=400, msg="请上传Excel文件")
+            return ErrorResponse(msg="请上传Excel文件")
 
-        file = request.FILES['file']
         try:
-            # 2. 解析Excel文件
-            excel_data = parse_excel_file(file)
+            excel_data = parse_excel_file(request.FILES['file'])
             if not excel_data:
-                return ErrorResponse(code=400, msg="Excel文件无有效数据")
+                return ErrorResponse(msg="Excel文件无有效数据")
 
-            # 3. 数据转换与校验
-            success_count = 0
-            fail_count = 0
+            success_count = fail_count = 0
             fail_details = []
+            headers = list(USER_EXCEL_HEADER_MAP.keys())
 
-            for row_idx, row_data in enumerate(excel_data, start=2):  # 行号从2开始（跳过表头）
+            for row_idx, row_data in enumerate(excel_data, start=2):
                 row_dict = {}
-                # 映射Excel列数据到字段（按表头顺序）
-                headers = list(USER_EXCEL_HEADER_MAP.keys())
+                # 字段映射
                 for col_idx, header in enumerate(headers):
                     field = USER_EXCEL_HEADER_MAP[header]
-                    value = row_data[col_idx] if col_idx < len(row_data) else None
+                    val = row_data[col_idx] if col_idx < len(row_data) else None
+                    if val:
+                        row_dict[field] = val
 
-                    # 特殊字段处理
-                    if field == 'role' and value:
-                        # 角色ID转列表（多个用,分隔）
-                        row_dict[field] = [int(r.strip()) for r in str(value).split(',') if r.strip()]
-                    elif field == 'post' and value:
-                        # 岗位ID转列表
-                        row_dict[field] = [int(p.strip()) for p in str(value).split(',') if p.strip()]
-                    elif value is not None and value != '':
-                        row_dict[field] = value
-
-                # 4. 序列化校验并创建用户
+                # 校验并创建用户
                 try:
                     serializer = UserCreateSerializer(data=row_dict)
                     serializer.is_valid(raise_exception=True)
@@ -73,168 +65,22 @@ class UserViewSet(CustomModelViewSet):
                 except Exception as e:
                     fail_count += 1
                     fail_details.append({
-                        "row": row_idx,
-                        "data": row_data,
-                        "error": str(e),
-                        "traceback": traceback.format_exc()[:200]  # 截断异常栈，避免返回过长
+                        "行号": row_idx, "数据": row_data, "错误": str(e)[:100]
                     })
 
-            # 5. 返回导入结果
             return DetailResponse(data={
-                "success_count": success_count,
-                "fail_count": fail_count,
-                "fail_details": fail_details
+                "成功数": success_count, "失败数": fail_count, "失败详情": fail_details
             }, msg=f"导入完成：成功{success_count}条，失败{fail_count}条")
 
         except Exception as e:
-            return ErrorResponse(code=500, msg=f"导入失败：{str(e)}")
-
-    @action(methods=["GET"], detail=False, permission_classes=[IsAuthenticated])
-    def auth(self, request):
-        """
-        获取用户权限信息
-        """
-        user = request.user
-
-        result = {}
-        # ========== 核心：生成跨域头像完整URL ==========
-        avatar_url = None
-        if user.avatar:
-            relative_url = rewrite_image_url(request, user.avatar.url)
-            avatar_url = get_full_image_url(request, relative_url)
-        result['user'] = {
-            "userId": user.id,
-            "username": user.username,
-            "nickName": user.nickname,
-            "phone": user.phone,
-            "gender": user.gender,
-            "email": user.email,
-            "avatar": avatar_url,  # 返回完整跨域URL
-            "dept": user.dept_id,
-            "remark": user.remark,
-            "is_superuser": user.is_superuser,
-        }
-        role = getattr(user, 'role')
-        role_info = role.values('id', 'role_name', 'role_key')
-        if role_info:
-            result['role'] = role_info[0]
-        else:
-            return ErrorResponse(code=4003, msg="该用户没有设定角色，请联系管理员分配角色")
-        # 获取对应的menus
-        is_superuser = request.user.is_superuser
-        is_admin = request.user.role.values_list('admin', flat=True)
-        if is_superuser or True in is_admin:
-            queryset = Menu.objects.filter(status='0').all()
-        else:
-            menu_id_list = request.user.role.values_list('menu', flat=True)
-            queryset = Menu.objects.filter(status='0', id__in=menu_id_list)
-
-        menu_serializers = MenuSerializer(queryset, many=True).data
-
-        permissions = []
-        menus = []
-        for menu_serializer in menu_serializers:
-            is_hide = menu_serializer['is_hide']
-            is_keep_alive = menu_serializer['is_keep_alive']
-            is_affix = menu_serializer['is_affix']
-            is_iframe = menu_serializer['is_iframe']
-            permission = menu_serializer['permission']
-            menu_type = menu_serializer['menu_type']
-            menu = {
-                "id": menu_serializer['id'],
-                "parent_id": menu_serializer['parent'],
-                "name": menu_serializer['path'],
-                "path": menu_serializer['path'],
-                "redirect": '',
-                "component": menu_serializer['component'],
-                "meta": {
-                    "title": menu_serializer['menu_name'],
-                    "isLink": menu_serializer['is_link'],
-                    "isHide": False if is_hide == '0' else True,
-                    "isKeepAlive": False if is_keep_alive == '1' else True,
-                    "isAffix": False if is_affix == '1' else True,
-                    "isIframe": False if is_iframe == '1' else True,
-                    "auth": [] if permission == '' else [permission],
-                    "icon": menu_serializer['icon']
-                },
-                'children': []
-            }
-            if menu_type != 'F':
-                menus.append(menu)
-            if menu_type in ['F', 'C']:
-                permissions.append(permission)
-
-        res_p = []
-        # 创建数据字典
-        data_dict = {item["id"]: item for item in menus}
-
-        # 遍历数据，找出最高级节点（parent_id为None）
-        for item in menus:
-            if item["parent_id"] is None:
-                res_p.append(item)
-
-        # 递归构建树形结构
-        def build_tree(node, data_dict):
-            node["children"] = [
-                build_tree(data_dict[child_id], data_dict)
-                for child_id in data_dict
-                if data_dict[child_id]["parent_id"] == node["id"]
-            ]
-            return node
-
-        # 构建树形结构
-        for item in res_p:
-            build_tree(item, data_dict)
-
-        result['menus'] = res_p
-        result['permissions'] = permissions
-        return DetailResponse(data=result, msg="获取成功")
-
-    def user_info(self, request):
-        """
-        获取当前用户信息
-        """
-        user = request.user
-        # 生成跨域头像URL
-        avatar_url = None
-        if user.avatar:
-            relative_url = rewrite_image_url(request, user.avatar.url)
-            avatar_url = get_full_image_url(request, relative_url)
-
-        result = {
-            "nickname": user.nickname,
-            "phone": user.phone,
-            "gender": user.gender,
-            "email": avatar_url  # 统一字段
-        }
-        return DetailResponse(data=result, msg="获取成功")
-
-    def update_user_info(self, request):
-        """
-        修改当前用户信息
-        """
-        user = request.user
-        Users.objects.filter(id=user.id).update(**request.data)
-        return DetailResponse(data=None, msg="修改成功")
-
-    def export_to_excel(self, request):
-        """
-        用户表导出
-        """
-        user_resource = UserResource()
-        dataset = user_resource.export()
-        timestamp = timezone.now().strftime('%Y%m%d%H%M%S')
-        filename = f"user_{timestamp}.xls"
-        response = HttpResponse(dataset.xls, content_type='application/vnd.ms-excel')
-        response['Content-Disposition'] = f'attachment; filename="{filename}"'
-        return response
+            return ErrorResponse(msg=f"导入失败：{str(e)}")
 
     @action(methods=["POST"], detail=False, permission_classes=[IsAuthenticated])
     def batch_import_avatar(self, request):
         """
         批量导入用户头像（zip压缩包，内为「身份证号码.图片后缀」的文件）
-        事务原子性：要么全部成功，要么全部回滚
-        无Redis、无Celery，纯Django原生实现
+        取消事务回滚，生成真实导入结果报告：成功数、失败数、失败详情
+        文件名与单个上传保持统一
         """
         current_user = request.user
         # 1. 管理员权限校验
@@ -260,43 +106,190 @@ class UserViewSet(CustomModelViewSet):
             fail_count = 0
             fail_details = []
 
-            # ===================== 核心：事务包裹（全成功/全回滚） =====================
-            with transaction.atomic():
-                for id_card, img_file in id_card_image_map.items():
-                    try:
-                        # 匹配用户
-                        user = Users.objects.exclude(is_delete=1).get(id_card=id_card)
-                        # 图片标准化处理（转JPG、高1024、≤1M）
-                        processed_img = process_image(img_file)
-                        # 删除旧头像文件
-                        if user.avatar:
-                            delete_old_file(user.avatar.path)
-                        # 保存新头像
-                        user.avatar = processed_img
-                        user.save(update_fields=['avatar'])
-                        success_count += 1
+            # ===================== 已取消事务，支持部分成功导入 =====================
+            for id_card, img_file in id_card_image_map.items():
+                try:
+                    # 匹配用户
+                    user = Users.objects.exclude(is_delete=1).get(id_card=id_card)
+                    # 图片标准化处理（转JPG、高1024、≤1M）
+                    processed_img = process_image(img_file)
 
-                    except Users.DoesNotExist:
-                        fail_details.append({
-                            "id_card": id_card, "error": "未找到对应用户"
-                        })
-                        fail_count += 1
-                    except Exception as e:
-                        fail_details.append({
-                            "id_card": id_card, "error": str(e)
-                        })
-                        fail_count += 1
+                    # 文件名与单个上传保持统一
+                    processed_img.name = renameuploadimg(processed_img.name)
 
-                # 只要有失败，立即触发事务回滚
-                if fail_count > 0:
-                    raise Exception(f"检测到 {fail_count} 条异常数据，已回滚所有用户头像修改")
+                    # 删除旧头像文件
+                    if user.avatar:
+                        delete_old_file(user.avatar.path)
+                    # 保存新头像
+                    user.avatar = processed_img
+                    user.save(update_fields=['avatar'])
+                    success_count += 1
 
-            # 全部成功返回结果
+                except Users.DoesNotExist:
+                    fail_count += 1
+                    fail_details.append({
+                        "id_card": id_card,
+                        "error": "未找到对应用户"
+                    })
+                except Exception as e:
+                    fail_count += 1
+                    fail_details.append({
+                        "id_card": id_card,
+                        "error": str(e)[:100]  # 截断错误信息
+                    })
+
+            # 返回真实导入结果报告
             return DetailResponse(data={
                 "success_count": success_count,
-                "fail_count": 0,
-                "fail_details": []
-            }, msg=f"批量导入头像成功！共处理 {success_count} 个用户")
+                "fail_count": fail_count,
+                "fail_details": fail_details
+            }, msg=f"批量导入头像完成：成功 {success_count} 个，失败 {fail_count} 个")
 
         except Exception as e:
             return ErrorResponse(code=500, msg=f"批量导入失败：{str(e)}")
+
+    @action(methods=["POST"], detail=True, permission_classes=[IsAuthenticated])
+    def upload_avatar(self, request, pk=None):
+        """
+        单个用户头像上传（支持当前用户/管理员操作）
+        - detail=True：需要传入用户ID(pk)
+        - 管理员可更新任意用户头像，普通用户只能更新自己的头像
+        """
+        # 获取目标用户
+        target_user = self.get_object()
+        current_user = request.user
+
+        # 权限校验：普通用户只能更新自己的头像
+        if not (current_user.is_superuser or
+                current_user.role.filter(admin=True).exists() or
+                current_user.id == target_user.id):
+            return ErrorResponse(code=403, msg="您无权修改此用户头像")
+
+        # 校验文件是否上传
+        if 'avatar' not in request.FILES:
+            return ErrorResponse(msg="请上传头像文件")
+
+        try:
+            # 1. 获取上传文件并处理
+            avatar_file = request.FILES['avatar']
+            serializer = UserAvatarSerializer(
+                instance=target_user,
+                data={'avatar': avatar_file},
+                context={'request': request},
+                partial=True  # 支持部分更新
+            )
+
+            # 2. 序列化校验（复用已有的文件格式/大小校验）
+            serializer.is_valid(raise_exception=True)
+
+            # 3. 事务处理：删除旧头像→处理新头像→保存
+            with transaction.atomic():
+                # 删除旧头像文件
+                if target_user.avatar:
+                    delete_old_file(target_user.avatar.path)
+
+                # 图片标准化处理（转JPG、等比缩放、压缩至1M内）
+                processed_avatar = process_image(avatar_file)
+
+                processed_avatar.name = renameuploadimg(processed_avatar.name)
+
+                # 4. 保存新头像
+                target_user.avatar = processed_avatar
+                target_user.save(update_fields=['avatar', 'update_datetime'])
+
+            # 5. 返回处理后的完整头像URL
+            return DetailResponse(data={
+                "id": target_user.id,
+                "nickname": target_user.nickname,
+                "avatar_url": self._get_user_avatar_url(request, target_user),
+                "msg": "头像上传成功"
+            })
+
+        except Exception as e:
+            return ErrorResponse(msg=f"头像上传失败：{str(e)}")
+
+    @action(methods=["GET"], detail=False, permission_classes=[IsAuthenticated])
+    def auth(self, request):
+        """获取用户权限+菜单+头像信息"""
+        user = request.user
+        # 整合头像URL
+        result = {"user": {
+            "userId": user.id,
+            "username": user.username,
+            "nickName": user.nickname,
+            "phone": user.phone,
+            "gender": user.gender,
+            "email": user.email,
+            "avatar": self._get_user_avatar_url(request, user),
+            "dept": user.dept_id,
+            "remark": user.remark,
+            "is_superuser": user.is_superuser,
+        }}
+
+        # 角色校验
+        role_info = user.role.values('id', 'role_name', 'role_key').first()
+        if not role_info:
+            return ErrorResponse(code=4003, msg="请先为用户分配角色")
+        result['role'] = role_info
+
+        # 菜单权限
+        is_admin = user.is_superuser or user.role.filter(admin=True).exists()
+        menu_qs = Menu.objects.filter(status='0')
+        if not is_admin:
+            menu_qs = menu_qs.filter(id__in=user.role.values_list('menu', flat=True))
+
+        # 菜单树形结构
+        menu_data = MenuSerializer(menu_qs, many=True).data
+        permissions, menus = [], []
+        for item in menu_data:
+            menu = {
+                "id": item['id'], "parent_id": item['parent'], "name": item['path'],
+                "path": item['path'], "component": item['component'],
+                "meta": {
+                    "title": item['menu_name'], "icon": item['icon'],
+                    "isLink": item['is_link'], "isHide": item['is_hide'] != '0',
+                    "isKeepAlive": item['is_keep_alive'] == '1',
+                    "isAffix": item['is_affix'] == '1',
+                    "isIframe": item['is_iframe'] == '1',
+                    "auth": [item['permission']] if item['permission'] else []
+                }, "children": []
+            }
+            if item['menu_type'] != 'F':
+                menus.append(menu)
+            if item['menu_type'] in ['F', 'C']:
+                permissions.append(item['permission'])
+
+        # 构建树形菜单
+        data_dict = {i["id"]: i for i in menus}
+        def build_tree(node):
+            node["children"] = [build_tree(data_dict[cid]) for cid in data_dict if data_dict[cid]["parent_id"] == node["id"]]
+            return node
+        tree_menus = [build_tree(n) for n in menus if n["parent_id"] is None]
+
+        result['menus'] = tree_menus
+        result['permissions'] = permissions
+        return DetailResponse(data=result)
+
+    @action(methods=["GET"], detail=False, permission_classes=[IsAuthenticated])
+    def user_info(self, request):
+        """获取当前用户信息"""
+        user = request.user
+        return DetailResponse(data={
+            "nickname": user.nickname, "phone": user.phone, "gender": user.gender,
+            "email": user.email, "avatar": self._get_user_avatar_url(request, user)
+        })
+
+    @action(methods=["POST"], detail=False, permission_classes=[IsAuthenticated])
+    def update_user_info(self, request):
+        """修改当前用户信息"""
+        Users.filter(id=request.user.id).update(**request.data)
+        return DetailResponse(msg="修改成功")
+
+    @action(methods=["GET"], detail=False, permission_classes=[IsAuthenticated])
+    def export_to_excel(self, request):
+        """导出用户数据"""
+        dataset = UserResource().export()
+        filename = f"user_{timezone.now().strftime('%Y%m%d%H%M%S')}.xls"
+        response = HttpResponse(dataset.xls, content_type='application/vnd.ms-excel')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
