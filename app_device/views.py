@@ -5,10 +5,9 @@ from django.http import HttpResponse
 from django.utils import timezone
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
-from app_device.models import Devices, DeviceConLog
+from app_device.models import Devices
 from app_device.serializers import (
-    DeviceSerializer, DeviceCreateSerializer,
-    DeviceConLogSerializer, DeviceResource
+    DeviceSerializer, DeviceCreateSerializer, DeviceResource
 )
 from utils.json_response import DetailResponse, ErrorResponse
 from utils.viewset import CustomModelViewSet
@@ -99,17 +98,3 @@ class DeviceViewSet(CustomModelViewSet):
         )
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         return response
-
-
-# =====================================================
-# 设备连接日志视图集
-# =====================================================
-class DeviceConLogViewSet(CustomModelViewSet):
-    """
-    设备连接日志接口
-    """
-    queryset = DeviceConLog.objects.all().order_by('-offline_time')
-    serializer_class = DeviceConLogSerializer
-    permission_classes = [IsAuthenticated]
-    filterset_fields = ['device_code']
-    http_method_names = ['get', 'delete']

@@ -74,7 +74,9 @@ INSTALLED_APPS = [
     'app_message',  # 信息中心
     'app_example',  # 测试样例
     'app_init' , # 数据初始化
-    'app_device' # 设备管理
+    'app_device', # 设备管理
+    'app_device_con_log',# 设备连接日志
+    'django_extensions'# 格式化输出所有路由
 ]
 
 MIDDLEWARE = [
