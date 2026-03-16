@@ -22,7 +22,8 @@ class Devices(BaseModel):
         max_length=40, verbose_name='门禁位置', help_text='门禁位置'
     )
     sn_code = models.CharField(
-        max_length=20, null=True, blank=True,
+        max_length=20,
+        unique=True,  # 关键：添加唯一约束
         verbose_name="序列号", help_text="设备SN序列号"
     )
     status = models.CharField(
@@ -78,13 +79,10 @@ class Devices(BaseModel):
         ordering = ("sort",)
 
 class DeviceConLog(BaseModel):
-    device_code = models.ForeignKey(
+    sn_code = models.ForeignKey(
         to='Devices',
-        to_field='id',
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name='conn_log',
+        to_field='sn_code',
+        on_delete=models.CASCADE,
         verbose_name='门禁编号',
         help_text='关联设备表门禁编号'
     )
