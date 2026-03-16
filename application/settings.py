@@ -73,7 +73,8 @@ INSTALLED_APPS = [
     'app_operation_log',  # 操作日志
     'app_message',  # 信息中心
     'app_example',  # 测试样例
-    'app_init'  # 数据初始化
+    'app_init' , # 数据初始化
+    'app_device' # 设备管理
 ]
 
 MIDDLEWARE = [

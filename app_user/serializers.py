@@ -85,8 +85,8 @@ class UserResource(resources.ModelResource):
 
     class Meta:
         model = Users
-        fields = ('id', 'status', 'username', 'nickname', 'employee_no', 'email', 'phone', 'gender',
-                  'post', 'role', 'dept', 'remark', 'id_card', 'update_datetime', 'create_datetime')
+        fields = ('id', 'status', 'username', 'nickname', 'id_card', 'employee_no', 'email', 'phone', 'gender',
+                  'post', 'role', 'dept', 'remark', 'update_datetime', 'create_datetime')
         export_order = fields
 
 class UserAvatarSerializer(serializers.ModelSerializer):

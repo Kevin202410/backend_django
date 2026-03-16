@@ -43,6 +43,13 @@ USER_EXCEL_HEADER_MAP = {
     '邮箱(选填)': 'email'
 }
 
+DEVICE_EXCEL_HEADER_MAP = {
+    '门禁名称': 'device_name',
+    '门禁位置': 'device_address',
+    'SN': 'sn_code',
+    '排序': 'sort'
+}
+
 # ------------------------------
 # 图片处理配置
 # ------------------------------

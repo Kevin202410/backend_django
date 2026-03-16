@@ -35,6 +35,7 @@ urlpatterns = [
     path('system/', include('app_message.urls')),
     path('job/crontab/', include('app_crontab.urls')),
     path('tool/', include('app_monitor.urls')),
+    path('system/', include('app_device.urls')),
 ]
 # ✅ 关键：开发环境开放媒体文件访问（修复404）
 if settings.DEBUG:
