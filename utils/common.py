@@ -395,3 +395,18 @@ def re_api(api):
     """提取API路径（去除参数）"""
     match = re.match(r'(/[^?]+)', api)
     return match.group(1) if match else api
+
+def get_login_data(base_url, sn):
+    response_data = {
+        "cmd": "login",
+        "url": f"{base_url}/attendance",
+        "user": settings.MQTT_USERNAME,
+        "pd": settings.MQTT_PASSWORD,
+        "host": settings.MQTT_HOST,
+        "port": int(settings.MQTT_PORT),
+        "uploadTopic": f"cs/{sn}/events",
+        "downTopic": f"cs/{sn}/msg",
+        "clientID": sn,
+        "keepalive": int(settings.MQTT_KEEPALIVE),
+    }
+    return response_data

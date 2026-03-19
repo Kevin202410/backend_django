@@ -8,12 +8,12 @@ from utils.models import BaseModel, table_prefix
 
 class DeviceConLog(BaseModel):
     sn_code = models.ForeignKey(
-        to=Devices,
+        Devices,
         to_field='sn_code',
-        on_delete=models.CASCADE,
-        related_name='con_log',
-        verbose_name='门禁编号',
-        help_text='关联设备表门禁编号'
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        verbose_name="关联设备",
+        help_text="关联的门禁设备"
     )
     offline_time = models.DateTimeField(
         null=True, blank=True, verbose_name="离线时间", help_text='离线时间'
@@ -30,6 +30,13 @@ class DeviceConLog(BaseModel):
     log_time = models.DateTimeField(
         null=True, blank=True, verbose_name="同步完成时间", help_text='同步完成时间'
     )
+
+
+    class Meta:
+        verbose_name = '设备连接日志'
+        verbose_name_plural = verbose_name
+        db_table = table_prefix + 'device_con_log'
+        ordering = ("-offline_time",)
 
     def save(self, *args, **kwargs):
         """
@@ -62,12 +69,28 @@ class DeviceConLog(BaseModel):
             self.offline_duration = "".join(duration_list) if duration_list else "瞬间恢复"
 
 
-        # 执行默认保存逻辑
+        # 先执行日志的默认保存逻辑
         super().save(*args, **kwargs)
+        # ===================== 修复核心逻辑 =====================
+        # 直接获取外键关联的设备（不需要再次查询！）
+        device = self.sn_code
 
+        # 如果设备为空，直接跳过，避免报错
+        if not device:
+            print(f"日志未关联设备，跳过状态更新 | 日志ID: {self.id}")
+            return
 
-    class Meta:
-        verbose_name = '设备连接日志'
-        verbose_name_plural = verbose_name
-        db_table = table_prefix + 'device_con_log'
-        ordering = ("-offline_time",)
+        # 3. 更新设备状态
+        try:
+            if self.online_time:
+                device.status = '1'  # 在线
+            elif self.offline_time and not self.online_time:
+                device.status = '0'  # 离线
+
+            # 仅更新状态字段，提升性能
+            device.save(update_fields=['status'])
+            print(
+                f"设备【{device.device_name}({device.sn_code})】状态已更新：{'在线' if device.status == '1' else '离线'}")
+
+        except Exception as e:
+            print(f"更新设备状态失败 | SN: {device.sn_code} | 错误: {str(e)}")

@@ -12,7 +12,6 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 import os
 from pathlib import Path
 import platform
-
 from decouple import Config, RepositoryEnv
 
 # 像这样在项目内部构建路径: BASE_DIR / 'subdir'.
@@ -32,6 +31,14 @@ REDIS_URL = config("REDIS_URL")
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
+# mqtt
+MQTT_USERNAME = config("MQTT_USERNAME")
+MQTT_PASSWORD = config("MQTT_PASSWORD")
+MQTT_HOST = config("MQTT_HOST")
+MQTT_PORT = config("MQTT_PORT")
+MQTT_KEEPALIVE = config("MQTT_KEEPALIVE")
+BASE_URL = config("BASE_URL")
+
 # 安全警告：请将生产中使用的密钥保密！
 SECRET_KEY = 'django-insecure-2)8w-=^^xw!=+)id6+#o2yfn2h12wstw!hi-e^41)jyp!o^4!w'
 
@@ -39,7 +46,7 @@ SECRET_KEY = 'django-insecure-2)8w-=^^xw!=+)id6+#o2yfn2h12wstw!hi-e^41)jyp!o^4!w
 DEBUG = config("DEBUG")
 # 允许使用通道的客户端
 ALLOWED_HOSTS = ["*"]
-
+APPEND_SLASH = False
 # Application definition
 
 INSTALLED_APPS = [
@@ -76,6 +83,7 @@ INSTALLED_APPS = [
     'app_init' , # 数据初始化
     'app_device', # 设备管理
     'app_device_con_log',# 设备连接日志
+    'app_attendance_record',# 考勤记录表
     'django_extensions'# 格式化输出所有路由
 ]
 
@@ -460,7 +468,7 @@ CACHES = {
     },
 }
 
-EXEC_LOG_PATH = os.path.join(BASE_DIR, 'logs', 'paopao.log')
+EXEC_LOG_PATH = os.path.join(BASE_DIR, 'logs', 'sunny.log')
 TEMP_EXEC_PATH = os.path.join(BASE_DIR, 'logs')
 
 # ******************** 其他配置 ******************** #

@@ -4,15 +4,23 @@ from django.shortcuts import render
 from django.http import HttpResponse
 from django.utils import timezone
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from app_device.models import Devices
 from app_device.serializers import (
     DeviceSerializer, DeviceCreateSerializer, DeviceResource
 )
 from utils.json_response import DetailResponse, ErrorResponse
 from utils.viewset import CustomModelViewSet
-from utils.common import parse_excel_file, DEVICE_EXCEL_HEADER_MAP
-
+from utils.common import parse_excel_file, DEVICE_EXCEL_HEADER_MAP, get_login_data
+from django.views import View
+from django.http import JsonResponse
+from django.core.exceptions import ValidationError
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
+from rest_framework.views import APIView
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
+from rest_framework import status
 # =====================================================
 # 设备管理视图集
 # =====================================================
@@ -98,3 +106,47 @@ class DeviceViewSet(CustomModelViewSet):
         )
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         return response
+
+@method_decorator(csrf_exempt, name='dispatch')
+class DeviceLoginView(APIView):
+    """
+    设备登录路由视图
+    路由：device/login
+    功能：返回设备MQTT登录所需的配置参数
+    """
+    permission_classes = [AllowAny]
+    def post(self, request):
+
+        try:
+            # 1. 获取设备序列号（sn）：从查询参数中获取（必填）
+            sn = request.data.get('sn')
+            if not sn:
+                raise ValidationError("设备序列号（sn）不能为空")
+
+            # 2. 从当前域名构造基础URL
+            base_url = request.get_host()
+            # 补全HTTP协议（避免URL缺失协议头）
+            if not base_url.startswith(('http://', 'https://')):
+                base_url = f"http://{base_url}"
+
+            # 3. 构造响应数据（严格按需求格式，配置从settings读取）
+            response_data = get_login_data(base_url, sn)
+            print(f"设备【{sn}】获取MQTT登录配置成功")
+            return JsonResponse(response_data, status=200)
+
+        except ValidationError as e:
+            # 参数校验失败返回错误响应
+            print(f"设备登录配置获取失败：{str(e)}")
+            return JsonResponse({
+                "code": 400,
+                "msg": str(e),
+                "data": None
+            }, status=400)
+        except Exception as e:
+            # 未知异常返回服务器错误
+            print(f"设备登录配置获取异常：{str(e)}")
+            return JsonResponse({
+                "code": 500,
+                "msg": "服务器内部错误",
+                "data": None
+            }, status=500)

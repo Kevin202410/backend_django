@@ -1,10 +1,3 @@
-"""
-Time:     2023/8/23 11:09
-Author:   公众号【布鲁的Python之旅】，【github】https://github.com/taskPyroer， 【gitee】https://gitee.com/hu_yupeng123/projects
-Version:  V 0.1
-File:     serializers
-Describe: 
-"""
 from import_export.fields import Field
 from import_export import resources
 from app_post.models import Post
