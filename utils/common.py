@@ -301,6 +301,25 @@ def process_image(image_file, target_height=TARGET_HEIGHT, max_size=MAX_FILE_SIZ
     except Exception as e:
         raise Exception(f"图片处理失败：{str(e)}")
 
+def base64_to_file(base64_str, file_name):
+    """Base64字符串转InMemoryUploadedFile"""
+    try:
+        # 去除base64前缀（如果有）
+        if 'base64,' in base64_str:
+            base64_str = base64_str.split('base64,')[1]
+        # 解码base64
+        img_data = base64.b64decode(base64_str)
+        img_file = io.BytesIO(img_data)
+        # 构建InMemoryUploadedFile（模拟文件上传）
+        img_file = InMemoryUploadedFile(
+            img_file, None, file_name, 'image/jpeg', len(img_data), None
+        )
+        # 图片标准化处理（压缩、缩放）
+        return process_image(img_file)
+    except Exception as e:
+        raise Exception(f"Base64图片转换失败：{str(e)}")
+
+
 # ------------------------------
 # 压缩包处理
 # ------------------------------

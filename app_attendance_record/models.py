@@ -19,6 +19,7 @@ class AttendanceRecord(BaseModel):
     )
     device = models.ForeignKey(
         Devices,
+        to_field='sn_code',
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
@@ -37,8 +38,8 @@ class AttendanceRecord(BaseModel):
         verbose_name='命令类型',
         help_text="命令类型"
     )
-    img_address = models.CharField(
-        max_length=100,
+    img_address = models.FileField(
+        upload_to='attendance/',
         null=True,
         blank=True,
         verbose_name='考勤凭证',
