@@ -131,7 +131,6 @@ class DeviceLoginView(APIView):
 
             # 3. 构造响应数据（严格按需求格式，配置从settings读取）
             response_data = get_login_data(base_url, sn)
-            print(f"设备【{sn}】获取MQTT登录配置成功")
             return JsonResponse(response_data, status=200)
 
         except ValidationError as e:

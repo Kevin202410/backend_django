@@ -21,3 +21,4 @@ class DeviceConLogSerializer(CustomModelSerializer):
         model = DeviceConLog
         fields = "__all__"
         read_only_fields = ["id"]
+        ordering = ["create_datetime"]

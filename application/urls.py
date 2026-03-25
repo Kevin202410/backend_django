@@ -24,7 +24,7 @@ from app_attendance_record.views import AttendanceRecordViewSet
 urlpatterns = [
     path('getCaptcha/', CaptchaView.as_view()),
     path("login/", LoginView.as_view(), name="token_obtain_pair"),
-    # path('admin/', admin.site.urls),
+    path('admin/', admin.site.urls),
     path('system/', include('app_post.urls')),
     path('system/', include('app_dept.urls')),
     path('system/', include('app_apis.urls')),

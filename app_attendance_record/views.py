@@ -13,7 +13,8 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from app_user.models import Users
 from app_device.models import Devices
-from utils.common import base64_to_file
+from utils.common import base64_to_file, formatdatetime
+from django.utils import timezone
 from datetime import datetime
 
 class AttendanceRecordViewSet(CustomModelViewSet):
@@ -44,7 +45,7 @@ class AttendanceRecordViewSet(CustomModelViewSet):
         device = None
         # 匹配用户（按身份证号/工号）
         if user_id:
-            user = Users.objects.filter(id=user_id, is_delete=0).first()
+            user = Users.objects.filter(id_card=user_id, is_delete=0).first()
         # 匹配设备（按SN码）
         if sn:
             device = Devices.objects.filter(sn_code=sn, is_delete=0).first()
@@ -80,19 +81,22 @@ class AttendanceRecordViewSet(CustomModelViewSet):
             if not device:
                 return ErrorResponse(code=404, msg=f"未找到SN码为【{sn}】的设备")
 
+            time_stamp = datetime.fromtimestamp(time_stamp)
+
             # 图片保存+考勤记录入库
             img_file = None
             if image_base64:
                 img_file = base64_to_file(
                     base64_str=image_base64,
-                    file_name=f"{user_id}_{datetime.fromtimestamp(time_stamp).strftime('%Y%m%d%H%M%S')}.jpg"
+                    file_name=f"{user_id}_{time_stamp.strftime('%Y%m%d%H%M%S')}.jpg"
                 )
+
 
             # 构建考勤记录数据
             record_data = {
                 'user': user,
                 'device': device,
-                'time_stamp': datetime.fromtimestamp(time_stamp),
+                'time_stamp': formatdatetime(time_stamp),
                 'command': cmd
             }
             # 保存图片（如果有）

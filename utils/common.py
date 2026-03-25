@@ -422,10 +422,10 @@ def get_login_data(base_url, sn):
         "user": settings.MQTT_USERNAME,
         "pd": settings.MQTT_PASSWORD,
         "host": settings.MQTT_HOST,
-        "port": int(settings.MQTT_PORT),
+        "port": settings.MQTT_PORT,
         "uploadTopic": f"cs/{sn}/events",
         "downTopic": f"cs/{sn}/msg",
         "clientID": sn,
-        "keepalive": int(settings.MQTT_KEEPALIVE),
+        "keepalive": settings.MQTT_KEEPALIVE,
     }
     return response_data
