@@ -19,6 +19,7 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from app_login.views import CaptchaView, LoginView
+from app_attendance_record.views import AttendanceRecordViewSet
 
 urlpatterns = [
     path('getCaptcha/', CaptchaView.as_view()),
@@ -37,6 +38,8 @@ urlpatterns = [
     path('tool/', include('app_monitor.urls')),
     path('device/', include('app_device.urls')),
     path('device/', include('app_device_con_log.urls')),
+    path('attendance/',include('app_attendance_record.urls')),
+
 ]
 # ✅ 关键：开发环境开放媒体文件访问（修复404）
 if settings.DEBUG:

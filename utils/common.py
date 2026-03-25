@@ -301,6 +301,25 @@ def process_image(image_file, target_height=TARGET_HEIGHT, max_size=MAX_FILE_SIZ
     except Exception as e:
         raise Exception(f"图片处理失败：{str(e)}")
 
+def base64_to_file(base64_str, file_name):
+    """Base64字符串转InMemoryUploadedFile"""
+    try:
+        # 去除base64前缀（如果有）
+        if 'base64,' in base64_str:
+            base64_str = base64_str.split('base64,')[1]
+        # 解码base64
+        img_data = base64.b64decode(base64_str)
+        img_file = io.BytesIO(img_data)
+        # 构建InMemoryUploadedFile（模拟文件上传）
+        img_file = InMemoryUploadedFile(
+            img_file, None, file_name, 'image/jpeg', len(img_data), None
+        )
+        # 图片标准化处理（压缩、缩放）
+        return process_image(img_file)
+    except Exception as e:
+        raise Exception(f"Base64图片转换失败：{str(e)}")
+
+
 # ------------------------------
 # 压缩包处理
 # ------------------------------
@@ -395,3 +414,18 @@ def re_api(api):
     """提取API路径（去除参数）"""
     match = re.match(r'(/[^?]+)', api)
     return match.group(1) if match else api
+
+def get_login_data(base_url, sn):
+    response_data = {
+        "cmd": "login",
+        "url": f"{base_url}/attendance",
+        "user": settings.MQTT_USERNAME,
+        "pd": settings.MQTT_PASSWORD,
+        "host": settings.MQTT_HOST,
+        "port": settings.MQTT_PORT,
+        "uploadTopic": f"cs/{sn}/events",
+        "downTopic": f"cs/{sn}/msg",
+        "clientID": sn,
+        "keepalive": settings.MQTT_KEEPALIVE,
+    }
+    return response_data

@@ -2,7 +2,7 @@ from django.urls import path
 from rest_framework import routers
 
 
-from app_device.views import DeviceViewSet
+from app_device.views import DeviceViewSet, DeviceLoginView
 
 # 1. 路由注册（和用户模块格式完全一致）
 system_url = routers.SimpleRouter()
@@ -15,6 +15,7 @@ urlpatterns = [
     path('list/export_to_excel/', DeviceViewSet.as_view({'get': 'export_to_excel'})),
     # 设备Excel导入
     path('list/import_from_excel/', DeviceViewSet.as_view({'post': 'import_from_excel'})),
+    path('login/', DeviceLoginView.as_view()),
 ]
 
 # 3. 拼接自动生成的路由（和用户模块一致）
