@@ -46,6 +46,55 @@ class Devices(BaseModel):
     is_delete = models.BooleanField(
         default=False, verbose_name="逻辑删除", help_text="是否逻辑删除"
     )
+    model = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        verbose_name="设备型号",
+        help_text="设备型号"
+    )
+    version = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        verbose_name="固件版本",
+        help_text="固件版本"
+    )
+    vender = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        verbose_name="设备厂家",
+        help_text="设备厂家"
+    )
+    mac = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True,
+        verbose_name="MAC地址",
+        help_text="MAC地址"
+    )
+    ipaddress = models.GenericIPAddressField(
+        blank=True,
+        null=True,
+        verbose_name="IP地址",
+        help_text="IP地址"
+    )
+    userNumber = models.IntegerField(
+        default=0,
+        verbose_name="用户数量",
+        help_text="用户数量"
+    )
+    record = models.IntegerField(
+        default=0,
+        verbose_name="考勤记录数",
+        help_text="考勤记录数"
+    )
+    face = models.IntegerField(
+        default=0,
+        verbose_name="人脸数量",
+        help_text="人脸数量"
+    )
 
     class Meta:
         db_table = table_prefix + "devices"

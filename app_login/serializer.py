@@ -1,12 +1,6 @@
-"""
-Time:     2023/9/2 14:56
-Author:   公众号【布鲁的Python之旅】，【github】https://github.com/taskPyroer， 【gitee】https://gitee.com/hu_yupeng123/projects
-Version:  V 0.1
-File:     serializer
-Describe:
-"""
-from datetime import datetime, timedelta
 
+from datetime import timedelta
+from django.utils import timezone
 from captcha.models import CaptchaStore
 from django_redis import get_redis_connection
 from rest_framework import serializers
@@ -39,7 +33,7 @@ class LoginSerializer(TokenObtainPairSerializer):
     # 开启验证码验证
     def validate_captcha(self, captcha):
         self.image_code = CaptchaStore.objects.filter(id=self.initial_data['captchaKey']).first()
-        five_minute_ago = datetime.now() - timedelta(hours=0, minutes=5, seconds=0)
+        five_minute_ago = timezone.now() - timedelta(hours=0, minutes=5, seconds=0)
         if self.image_code and five_minute_ago > self.image_code.expiration:
             self.image_code and self.image_code.delete()
             raise CustomValidationError('验证码过期')
@@ -93,7 +87,7 @@ class LoginSerializer(TokenObtainPairSerializer):
             # 缓存用户的jwt token
             if IS_SINGLE_TOKEN:  # 是否开启单点登录
                 redis_conn = get_redis_connection("singletoken")
-                k = "pao-single-token{}".format(user.id)
+                k = "django-single-token{}".format(user.id)
                 TOKEN_EXPIRE_CONFIG = getattr(settings, 'SIMPLE_JWT', None)
                 if TOKEN_EXPIRE_CONFIG:
                     TOKEN_EXPIRE = TOKEN_EXPIRE_CONFIG['ACCESS_TOKEN_LIFETIME']

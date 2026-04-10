@@ -21,7 +21,7 @@ class DeviceSerializer(CustomModelSerializer):
     class Meta:
         model = Devices
         fields = "__all__"
-        read_only_fields = ["id"]
+        read_only_fields = ["id","sn_code"]
 
 
 

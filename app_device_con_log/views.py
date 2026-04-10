@@ -6,9 +6,7 @@ from django.utils import timezone
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from app_device_con_log.models import DeviceConLog
-from app_device_con_log.serializers import (
-    DeviceConLogSerializer
-)
+from app_device_con_log.serializers import DeviceConLogSerializer
 from utils.json_response import DetailResponse, ErrorResponse
 from utils.viewset import CustomModelViewSet
 from utils.common import parse_excel_file, DEVICE_EXCEL_HEADER_MAP

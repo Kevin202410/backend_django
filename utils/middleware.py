@@ -1,10 +1,3 @@
-"""
-Time:     2023/12/3 14:16
-Author:   公众号【布鲁的Python之旅】，【github】https://github.com/taskPyroer， 【gitee】https://gitee.com/hu_yupeng123/projects
-Version:  V 0.1
-File:     middleware
-Describe: 自定义中间件
-"""
 import json
 
 from django.conf import settings
@@ -88,7 +81,7 @@ class ApiLoggingMiddleware(MiddlewareMixin):
                 try:
                     user, token = JWTTokenUserAuthentication().authenticate(request)
                     redis_conn = get_redis_connection("singletoken")
-                    k = "pao-single-token{}".format(user.id)
+                    k = "django-single-token{}".format(user.id)
                     cache_token = redis_conn.get(k)
                     if cache_token:
                         if not str(token) == str(cache_token):
