@@ -5,7 +5,6 @@ import time
 import json
 from django.conf import settings
 from .utils import get_logger
-from . import handlers
 
 logger = get_logger(__name__)
 
@@ -57,6 +56,7 @@ class MQTTClient:
         topic = msg.topic
         payload = msg.payload.decode('utf-8')
         # logger.info(f"收到消息 => {topic}: {payload}")
+        from . import handlers
         handlers.handle_message(topic, payload)
 
     def connect(self):
@@ -87,7 +87,6 @@ class MQTTClient:
             if self.connected:
                 result = self.client.publish(topic, payload, qos=qos)
                 if result.rc == mqtt.MQTT_ERR_SUCCESS:
-                    logger.info(f"发布消息成功 => {topic}: {payload}")
                     return True
                 else:
                     logger.error(f"发布消息失败 (尝试 {attempt+1}/{retry+1})，错误码: {result.rc}")

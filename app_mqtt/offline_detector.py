@@ -15,7 +15,7 @@ class OfflineDetector(threading.Thread):
     def __init__(self):
         super().__init__()
         self.interval = getattr(settings, 'MQTT_OFFLINE_DETECT_INTERVAL', 60)
-        self.timeout = getattr(settings, 'MQTT_OFFLINE_TIMEOUT', 120)
+        self.timeout = getattr(settings, 'MQTT_OFFLINE_TIMEOUT', 3600)
         self.running = True
         self.daemon = True
 

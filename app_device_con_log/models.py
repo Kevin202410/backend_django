@@ -33,7 +33,7 @@ class DeviceConLog(BaseModel):
     )
 
     class Meta:
+        db_table = table_prefix + 'device_con_log'
         verbose_name = '设备连接日志'
         verbose_name_plural = verbose_name
-        db_table = table_prefix + 'device_con_log'
         ordering = ("create_datetime",)

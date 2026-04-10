@@ -53,7 +53,7 @@ DEVICE_EXCEL_HEADER_MAP = {
 # ------------------------------
 # 图片处理配置
 # ------------------------------
-TARGET_HEIGHT = 1024  # 目标高度
+TARGET_HEIGHT = 1000  # 目标高度
 MAX_FILE_SIZE = 1 * 1024 * 1024  # 1M 上限
 TARGET_FORMAT = 'JPEG'  # 强制转换为JPG
 TARGET_EXT = '.jpg'

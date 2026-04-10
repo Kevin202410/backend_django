@@ -87,7 +87,7 @@ class LoginSerializer(TokenObtainPairSerializer):
             # 缓存用户的jwt token
             if IS_SINGLE_TOKEN:  # 是否开启单点登录
                 redis_conn = get_redis_connection("singletoken")
-                k = "pao-single-token{}".format(user.id)
+                k = "django-single-token{}".format(user.id)
                 TOKEN_EXPIRE_CONFIG = getattr(settings, 'SIMPLE_JWT', None)
                 if TOKEN_EXPIRE_CONFIG:
                     TOKEN_EXPIRE = TOKEN_EXPIRE_CONFIG['ACCESS_TOKEN_LIFETIME']

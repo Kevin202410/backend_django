@@ -45,7 +45,7 @@ class AttendanceRecordViewSet(CustomModelViewSet):
         device = None
         # 匹配用户（按身份证号/工号）
         if user_id:
-            user = Users.objects.filter(id_card=user_id, is_delete=0).first()
+            user = Users.objects.filter(id=user_id, is_delete=0).first()
         # 匹配设备（按SN码）
         if sn:
             device = Devices.objects.filter(sn_code=sn, is_delete=0).first()
@@ -66,7 +66,7 @@ class AttendanceRecordViewSet(CustomModelViewSet):
             body = request.data.get('body', {})
             cmd = request.data.get('cmd', '')
             sn = request.data.get('sn', '')
-            user_id = body.get('jobnumber', '')
+            user_id = int(body.get('jobnumber', ''))
             time_stamp = body.get('time', 0)
             image_base64 = body.get('image', '')
             # 核心参数校验

@@ -116,7 +116,7 @@ class MessageCenterCreateSerializer(CustomModelSerializer):
             users = Users.objects.filter(dept__id__in=target_dept).values_list('id', flat=True)
         if target_type in ['3']:  # 系统通知
             users = Users.objects.values_list('id', flat=True)
-            websocket_push("PaoAdmin", message={"sender": 'system', "contentType": 'SYSTEM',
+            websocket_push("Admin", message={"sender": 'system', "contentType": 'SYSTEM',
                                                 "content": '您有一条新消息~', "refresh_unread": True})
         print(users)
         targetuser_data = []

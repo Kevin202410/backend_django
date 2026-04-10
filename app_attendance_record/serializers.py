@@ -7,7 +7,7 @@ from datetime import datetime
 
 class AttendanceRecordSerializer(CustomModelSerializer):
     """考勤记录-基础序列化器（用于查询/展示）"""
-    username = serializers.CharField(source='user.username', read_only=True, label="姓名")
+    username = serializers.CharField(source='user.nickname', read_only=True, label="姓名")
     device_name = serializers.CharField(source='device.device_name', read_only=True, label="设备名称")
     device_address = serializers.CharField(source='device.device_address', read_only=True, label="设备地址")
     dept_name = serializers.CharField(source='user.dept.dept_name', read_only=True, label="所属部门")
@@ -46,7 +46,7 @@ class AttendanceRecordResource(resources.ModelResource):
         model = AttendanceRecord
         fields = (
             'id',
-            'user__username',
+            'user__nickname',
             'device__device_name',
             'device__device_address',
             'time_stamp',

@@ -55,7 +55,7 @@ def request_data(scope):
     return qs
 
 
-class PaoAdminWebSocket(AsyncJsonWebsocketConsumer):
+class AdminWebSocket(AsyncJsonWebsocketConsumer):
     async def connect(self):
         try:
             import jwt
@@ -66,7 +66,7 @@ class PaoAdminWebSocket(AsyncJsonWebsocketConsumer):
                 self.room_name = "user_" + str(self.user_id)
                 # 收到连接时候处理，
                 await self.channel_layer.group_add(
-                    "paoAdmin",
+                    "Admin",
                     self.channel_name
                 )
                 await self.channel_layer.group_add(
@@ -89,7 +89,7 @@ class PaoAdminWebSocket(AsyncJsonWebsocketConsumer):
     async def disconnect(self, close_code):
         # Leave room group
         await self.channel_layer.group_discard(self.room_name, self.channel_name)
-        await self.channel_layer.group_discard("paoAdmin", self.channel_name)
+        await self.channel_layer.group_discard("Admin", self.channel_name)
         print("连接关闭")
         try:
             await self.close(close_code)
@@ -97,7 +97,7 @@ class PaoAdminWebSocket(AsyncJsonWebsocketConsumer):
             pass
 
 
-class MegCenter(PaoAdminWebSocket):
+class MegCenter(AdminWebSocket):
     """
     消息中心
     """

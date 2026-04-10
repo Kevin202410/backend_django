@@ -1,5 +1,5 @@
 import traceback
-from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.db import transaction
 from django.http import HttpResponse
 from django.utils import timezone
@@ -23,7 +23,7 @@ class UserViewSet(CustomModelViewSet):
     update_serializer_class = UserCreateSerializer
     filterset_fields = ['status', 'phone', 'role', 'dept']
     search_fields = ["username", "nickname", "id_card"]
-    parser_classes = (MultiPartParser, FormParser)  # 支持文件上传解析器
+    parser_classes = (MultiPartParser, FormParser, JSONParser)  # 支持文件上传解析器
 
     def _get_user_avatar_url(self, request, user):
         """抽取私有方法：获取用户完整头像URL（复用代码）"""

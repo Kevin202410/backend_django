@@ -55,6 +55,7 @@ class AttendanceRecord(BaseModel):
         verbose_name = "考勤记录表"
         verbose_name_plural = verbose_name
         ordering = ("-time_stamp",)
+        unique_together = (('user', 'device', 'time_stamp'),)
         indexes = [
             # 新增索引提升查询性能
             models.Index(fields=["time_stamp"]),

@@ -42,7 +42,7 @@ MQTT_SUBSCRIBE_TOPICS = config("MQTT_SUBSCRIBE_TOPICS")
 MQTT_REDIS_DB = 2                                  # 使用独立的 DB，避免与其他冲突
 MQTT_REDIS_LIST_KEY = 'mqtt:outgoing'              # 列表键名
 MQTT_OFFLINE_DETECT_INTERVAL = 60   # 检测间隔（秒）
-MQTT_OFFLINE_TIMEOUT = 120          # 心跳超时阈值（秒）
+MQTT_OFFLINE_TIMEOUT = 3600          # 心跳超时阈值（秒）
 BASE_URL = config("BASE_URL")
 
 # 安全警告：请将生产中使用的密钥保密！

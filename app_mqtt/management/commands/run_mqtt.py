@@ -7,11 +7,12 @@ from app_mqtt.mqtt_client import mqtt_client
 from app_mqtt.offline_detector import OfflineDetector
 from app_mqtt.utils import get_logger
 from django.conf import settings
+from app_mqtt.redis_listener import RedisListener
 
 logger = get_logger(__name__)
 
 class Command(BaseCommand):
-    help = '启动 MQTT 服务（包含接收消息和离线检测）'
+    help = '启动 MQTT 服务（包含接收消息、离线检测和 Redis 消息队列）'
 
     def handle(self, *args, **options):
         self.stdout.write(self.style.SUCCESS('启动MQTT服务…'))
@@ -24,6 +25,10 @@ class Command(BaseCommand):
         # 启动离线检测线程
         offline_detector = OfflineDetector()
         offline_detector.start()
+
+        # 启动 Redis 监听器
+        redis_listener = RedisListener()
+        redis_listener.start()
 
         self.running = True
 
@@ -42,6 +47,7 @@ class Command(BaseCommand):
         finally:
             logger.info("停止所有组件...")
             offline_detector.stop()
+            redis_listener.stop()
             mqtt_client.client.loop_stop()
             mqtt_client.client.disconnect()
             offline_detector.join(timeout=5)
